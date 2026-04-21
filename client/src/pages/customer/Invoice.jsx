@@ -9,7 +9,7 @@
 //   4. Browser cetak/simpan sebagai PDF
 // ============================================================
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { bookingService } from "../../services";
 import { PACKAGES, AMARANTA_INFO, formatRupiah } from "../../data/packages";
 
@@ -91,6 +91,8 @@ function Row({ label, value, bold = false, large = false }) {
 
 export default function Invoice() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const invoiceType = searchParams.get("type") || "full"; // 'dp' | 'full'
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -199,9 +201,20 @@ export default function Invoice() {
     ? booking.package.tier_id.charAt(0).toUpperCase() +
       booking.package.tier_id.slice(1)
     : "—";
-  const paidAt =
-    booking.full_paid_at || booking.dp_paid_at || booking.created_at;
-  const invoiceNo = "INV-" + booking.order_id?.replace("AMRT-", "");
+
+  // Kalkulasi amount berdasarkan tipe invoice
+  const isDP = invoiceType === "dp";
+  const totalPrice = booking.total_price || 0;
+  const dpAmount = Math.round(totalPrice * 0.3);
+  const sisaAmount = totalPrice - dpAmount;
+  const displayAmount = isDP ? dpAmount : totalPrice;
+
+  const paidAt = isDP
+    ? booking.dp_paid_at || booking.created_at
+    : booking.full_paid_at || booking.dp_paid_at || booking.created_at;
+  const invoiceNo =
+    (isDP ? "INV-DP-" : "INV-") + booking.order_id?.replace("AMRT-", "");
+  const invoiceTitle = isDP ? "Invoice DP (30%)" : "Invoice Pelunasan";
   const statusColor =
     booking.status === "completed"
       ? "#10b981"
@@ -349,7 +362,7 @@ export default function Invoice() {
                   letterSpacing: "0.1em",
                 }}
               >
-                Invoice
+                {invoiceTitle}
               </p>
               <p
                 style={{

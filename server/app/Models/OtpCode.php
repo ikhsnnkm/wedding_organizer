@@ -9,7 +9,7 @@ class OtpCode extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['email', 'code', 'purpose', 'expires_at'];
+    protected $fillable = ['email', 'code', 'purpose', 'expires_at', 'created_at'];
 
     protected function casts(): array
     {
@@ -34,8 +34,8 @@ class OtpCode extends Model
             'email'      => $email,
             'code'       => $code,
             'purpose'    => $purpose,
-            'expires_at' => Carbon::now()->addMinutes(5),
-            'created_at' => Carbon::now(),
+            'expires_at' => Carbon::now('UTC')->addMinutes(5),
+            'created_at' => Carbon::now('UTC'),
         ]);
 
         return $code;
@@ -48,12 +48,12 @@ class OtpCode extends Model
             ->where('code', $code)
             ->where('purpose', $purpose)
             ->whereNull('used_at')
-            ->where('expires_at', '>', Carbon::now())
+            ->where('expires_at', '>', Carbon::now('UTC'))
             ->first();
 
         if (!$otp) return false;
 
-        $otp->update(['used_at' => Carbon::now()]);
+        $otp->update(['used_at' => Carbon::now('UTC')]);
         return true;
     }
 }

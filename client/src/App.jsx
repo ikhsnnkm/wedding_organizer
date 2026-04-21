@@ -89,8 +89,15 @@ function App() {
   useEffect(() => {
     if (!token) return;
     const API = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    const storedToken =
+      sessionStorage.getItem("amaranta_token") ||
+      localStorage.getItem("amaranta_token") ||
+      token;
     fetch(API + "/auth/me", {
-      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+      headers: {
+        Authorization: "Bearer " + storedToken,
+        Accept: "application/json",
+      },
     })
       .then((r) => {
         // Hanya logout jika token benar-benar invalid (401)

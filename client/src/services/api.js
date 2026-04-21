@@ -1,85 +1,104 @@
-// ============================================================
-// src/services/api.js — Axios instance untuk Laravel backend
-//
-// KONFIGURASI UNTUK LARAVEL:
-//   - Sanctum: token dikirim di Authorization: Bearer
-//   - CSRF: jika pakai session-based, uncomment bagian CSRF
-//   - Laravel returns { message, data, errors } pattern
-// ============================================================
-import axios from "axios";
-import { BASE_URL } from "../constants/apiRoutes";
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { authService } from "../services";
 
-const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 20000,
-  withCredentials: false, // Ganti true jika pakai Laravel Sanctum cookie
-  headers: {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    "X-Requested-With": "XMLHttpRequest", // Laravel deteksi AJAX
-  },
-});
+const useAuthStore = create(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isLoading: false,
+      error: null,
+      pendingEmail: null, // email yg menunggu OTP verify
 
-// ── Request Interceptor ──────────────────────────────────────
-// Sisipkan Bearer token ke setiap request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("amaranta_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
+      login: async (credentials) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await authService.login(credentials);
+          set({
+            token: data.token,
+            user: data.user,
+            isLoading: false,
+            pendingEmail: null,
+          });
+          sessionStorage.setItem("amaranta_token", data.token);
+          return data;
+        } catch (err) {
+          set({
+            error: err.userMessage || err.message || "Login gagal.",
+            isLoading: false,
+          });
+          throw err;
+        }
+      },
+
+      // Register: TIDAK set token — simpan pendingEmail untuk step OTP
+      register: async (formData) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await authService.register(formData);
+          // Hanya catat email yang perlu diverifikasi, belum login
+          set({ isLoading: false, pendingEmail: formData.email });
+          return data;
+        } catch (err) {
+          set({
+            error: err.userMessage || err.message || "Pendaftaran gagal.",
+            isLoading: false,
+          });
+          throw err;
+        }
+      },
+
+      // verifyOtp: baru set token dan user (login resmi)
+      verifyOtp: async (payload) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await authService.verifyOtp(payload);
+          set({
+            token: data.token,
+            user: data.user,
+            isLoading: false,
+            pendingEmail: null,
+          });
+          sessionStorage.setItem("amaranta_token", data.token);
+          return data;
+        } catch (err) {
+          set({
+            error: err.userMessage || err.message || "OTP tidak valid.",
+            isLoading: false,
+          });
+          throw err;
+        }
+      },
+
+      updateProfile: async (formData) => {
+        try {
+          const data = await authService.updateProfile(formData);
+          set((s) => ({ user: { ...s.user, ...data } }));
+          return data;
+        } catch (err) {
+          throw err;
+        }
+      },
+
+      setUser: (user) => set({ user }),
+      clearError: () => set({ error: null }),
+
+      logout: async () => {
+        try {
+          await authService.logout();
+        } catch {}
+        sessionStorage.removeItem("amaranta_token");
+        localStorage.removeItem("amaranta_token"); // clear legacy
+        set({ user: null, token: null, error: null, pendingEmail: null });
+      },
+    }),
+    {
+      name: "amaranta-auth",
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (s) => ({ user: s.user, token: s.token }),
+    },
+  ),
 );
 
-// ── Response Interceptor ─────────────────────────────────────
-// Handle error global & Laravel error format
-api.interceptors.response.use(
-  (response) => {
-    // Laravel biasanya return { data: {...}, message: '...' }
-    // Kita kembalikan langsung agar komponen bisa pakai response.data
-    return response;
-  },
-  (error) => {
-    const status = error.response?.status;
-    const message = error.response?.data?.message;
-    // Buat pesan error yang user-friendly dari Laravel response
-    if (error.response?.data?.errors) {
-      // Laravel validation error: { errors: { field: ['msg'] } }
-      const firstErrors = Object.values(error.response.data.errors);
-      error.userMessage = firstErrors.flat()[0] || "Data tidak valid";
-    } else if (message) {
-      error.userMessage = message;
-    } else if (status === 404) {
-      error.userMessage = "Data tidak ditemukan";
-    } else if (status === 403) {
-      error.userMessage = "Anda tidak memiliki akses";
-    } else if (status === 422) {
-      error.userMessage = "Data tidak valid, periksa kembali";
-    } else if (status >= 500) {
-      error.userMessage = "Terjadi kesalahan server. Coba beberapa saat lagi.";
-    } else if (!error.response) {
-      error.userMessage =
-        "Tidak bisa terhubung ke server. Periksa koneksi Anda.";
-    } else {
-      error.userMessage = "Terjadi kesalahan. Coba lagi.";
-    }
-
-    if (status === 401) {
-      localStorage.removeItem("amaranta_token");
-      localStorage.removeItem("amaranta-auth");
-      // Hanya redirect jika bukan halaman login/daftar
-      if (
-        !window.location.pathname.includes("/masuk") &&
-        !window.location.pathname.includes("/daftar")
-      ) {
-        window.location.href = "/masuk";
-      }
-    }
-
-    return Promise.reject(error);
-  },
-);
-
-export default api;
+export default useAuthStore;

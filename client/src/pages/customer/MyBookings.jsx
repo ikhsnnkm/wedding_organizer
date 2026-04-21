@@ -132,12 +132,23 @@ export default function CustomerMyBookings() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  useEffect(() => {
+  function loadBookings() {
+    setLoading(true);
     bookingService
       .getMy()
       .then((data) => setBookings(Array.isArray(data) ? data : []))
       .catch(() => setFetchErr("Gagal memuat data. Coba refresh halaman."))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadBookings();
+    // Auto refresh saat tab kembali difokus (misal setelah bayar di Midtrans)
+    function onFocus() {
+      loadBookings();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   async function handleCancel() {
@@ -230,17 +241,38 @@ export default function CustomerMyBookings() {
 
   return (
     <div>
-      <div className="mb-8">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-gold)] font-[var(--font-sans)] mb-2">
-          Akun Saya
-        </p>
-        <h1 className="font-[var(--font-display)] text-4xl text-[var(--color-dark)] mb-1">
-          Pemesanan Saya
-        </h1>
-        <p className="text-sm text-[var(--color-slate)] font-[var(--font-sans)]">
-          Halo, {user?.name?.split(" ")[0]} — pantau semua status pemesanan
-          Anda.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-gold)] font-[var(--font-sans)] mb-2">
+            Akun Saya
+          </p>
+          <h1 className="font-[var(--font-display)] text-4xl text-[var(--color-dark)] mb-1">
+            Pemesanan Saya
+          </h1>
+          <p className="text-sm text-[var(--color-slate)] font-[var(--font-sans)]">
+            Halo, {user?.name?.split(" ")[0]} — pantau semua status pemesanan
+            Anda.
+          </p>
+        </div>
+        <button
+          onClick={loadBookings}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-[var(--color-cream-border)] text-xs text-[var(--color-dark-muted)] hover:border-[var(--color-gold)] font-[var(--font-sans)] transition-all mt-2"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {bookings.length === 0 ? (

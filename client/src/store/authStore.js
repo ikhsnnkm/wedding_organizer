@@ -21,7 +21,7 @@ const useAuthStore = create(
             isLoading: false,
             pendingEmail: null,
           });
-          localStorage.setItem("amaranta_token", data.token);
+          sessionStorage.setItem("amaranta_token", data.token);
           return data;
         } catch (err) {
           set({
@@ -60,7 +60,7 @@ const useAuthStore = create(
             isLoading: false,
             pendingEmail: null,
           });
-          localStorage.setItem("amaranta_token", data.token);
+          sessionStorage.setItem("amaranta_token", data.token);
           return data;
         } catch (err) {
           set({
@@ -88,13 +88,14 @@ const useAuthStore = create(
         try {
           await authService.logout();
         } catch {}
-        localStorage.removeItem("amaranta_token");
+        sessionStorage.removeItem("amaranta_token");
+        localStorage.removeItem("amaranta_token"); // clear legacy
         set({ user: null, token: null, error: null, pendingEmail: null });
       },
     }),
     {
       name: "amaranta-auth",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({ user: s.user, token: s.token }),
     },
   ),

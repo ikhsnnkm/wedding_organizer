@@ -63,7 +63,11 @@ export default function BookingForm() {
     "Content-Type": "application/json",
     Accept: "application/json",
     Authorization:
-      "Bearer " + (localStorage.getItem("amaranta_token") || token || ""),
+      "Bearer " +
+      (sessionStorage.getItem("amaranta_token") ||
+        localStorage.getItem("amaranta_token") ||
+        token ||
+        ""),
   };
 
   const [form, setForm] = useState({
