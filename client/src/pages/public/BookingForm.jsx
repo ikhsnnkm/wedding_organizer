@@ -58,6 +58,13 @@ export default function BookingForm() {
   const [apiError, setApiError] = useState("");
 
   const today = new Date().toISOString().split("T")[0];
+  const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization:
+      "Bearer " + (localStorage.getItem("amaranta_token") || token || ""),
+  };
 
   const [form, setForm] = useState({
     name: user?.name || "",
