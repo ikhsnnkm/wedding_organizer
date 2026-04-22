@@ -401,9 +401,15 @@ export default function AdminBookings() {
         adminService.getBookings(),
         adminService.getVendors(),
       ]);
-      setBookings(Array.isArray(bData) ? bData : bData.data || []);
-      setVendors(Array.isArray(vData) ? vData : vData.data || []);
-    } catch {
+      // Paginate response sudah di-extract oleh service helper (d = r => r.data?.data ?? r.data)
+      // tapi paginate mengembalikan { data:[...], links, meta }
+      // sehingga r.data = full object, r.data.data = array items
+      const bookArr = Array.isArray(bData) ? bData : bData?.data || [];
+      const vendArr = Array.isArray(vData) ? vData : vData?.data || [];
+      setBookings(bookArr);
+      setVendors(vendArr);
+    } catch (err) {
+      console.error("Admin Bookings fetch error:", err);
     } finally {
       setLoading(false);
     }

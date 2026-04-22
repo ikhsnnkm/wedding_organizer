@@ -19,8 +19,13 @@ function AdminUsers() {
   useEffect(() => {
     adminService
       .getUsers()
-      .then((data) => setUsers(Array.isArray(data) ? data : data.data || []))
-      .catch(() => {})
+      .then((data) => {
+        // Paginate response: { data: [...], links, meta }
+        // Service helper sudah extract data.data, jadi terima langsung
+        const arr = Array.isArray(data) ? data : data?.data || data || [];
+        setUsers(arr);
+      })
+      .catch((err) => console.error("Users fetch error:", err))
       .finally(() => setLoading(false));
   }, []);
 

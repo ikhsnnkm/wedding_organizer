@@ -41,8 +41,8 @@ class AdminController extends Controller
             ->when($request->role,   fn($q, $v) => $q->where('role', $v))
             ->when($request->search, fn($q, $s) => $q->where('name', 'like', "%{$s}%")->orWhere('email', 'like', "%{$s}%"))
             ->latest()
-            ->paginate(20);
-        return response()->json($users);
+            ->get();   // get() agar frontend terima array langsung
+        return response()->json(['data' => $users]);
     }
 
     // DELETE /api/admin/users/{id}
@@ -90,7 +90,6 @@ class AdminController extends Controller
         $bookings = Booking::with(['customer', 'vendor', 'package',
                                    'vendorRequests.vendor', 'payments'])
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
-            // Filter baru berdasarkan workflow admin
             ->when($request->admin_status, fn($q, $s) => $q->where('admin_status', $s))
             ->when($request->search, function ($q, $s) {
                 $q->where('order_id', 'like', "%{$s}%")
@@ -100,9 +99,9 @@ class AdminController extends Controller
             ->when($request->date_from, fn($q, $d) => $q->where('wedding_date', '>=', $d))
             ->when($request->date_to,   fn($q, $d) => $q->where('wedding_date', '<=', $d))
             ->latest()
-            ->paginate(20);
+            ->get();   // get() agar frontend terima array langsung
 
-        return response()->json($bookings);
+        return response()->json(['data' => $bookings]);
     }
 
     // POST /api/admin/vendors — buat vendor baru (admin yang register vendor)
