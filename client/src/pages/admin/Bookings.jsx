@@ -414,15 +414,6 @@ export default function AdminBookings() {
   }, [load]);
 
   // Refresh detail jika sedang dibuka
-  async function handleUpdated() {
-    await load();
-    if (detail) {
-      setDetail((prev) => {
-        const fresh = bookings.find((b) => b.id === prev?.id);
-        return fresh || prev;
-      });
-    }
-  }
 
   const needAction = bookings.filter((b) =>
     ["waiting_vendor", "vendor_rejected", "vendor_confirmed"].includes(

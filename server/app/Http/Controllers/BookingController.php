@@ -91,7 +91,7 @@ class BookingController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Booking berhasil dibuat. Lanjutkan pembayaran DP.',
+            'message' => 'Booking berhasil dibuat. Lanjutkan ke pembayaran.',
             'data'    => $booking->load('package'),
         ], 201);
     }
@@ -195,15 +195,15 @@ class BookingController extends Controller
         $status  = $notif->transaction_status;
         $type    = $notif->payment_type;
 
-        preg_match('/^(AMRT-[A-Z0-9]+)-(DP|FULL)-/', $orderId, $m);
+        preg_match('/^(AMRT-[A-Z0-9]+-\d+)-PAY-/', $orderId, $m);
         if (empty($m)) return response()->json(['ok' => false]);
 
         $booking = Booking::where('order_id', $m[1])->first();
         if (!$booking) return response()->json(['ok' => false]);
 
-        $paymentType = strtolower($m[2]);
+        // Hanya ada satu tipe pembayaran: full (no DP)
         $payment = Payment::where('booking_id', $booking->id)
-                          ->where('type', $paymentType)
+                          ->where('type', 'full')
                           ->where('status', 'pending')
                           ->latest()->first();
 
@@ -271,7 +271,7 @@ class BookingController extends Controller
         }
 
         // Hanya bisa batalkan jika belum bayar
-        if (!in_array($booking->admin_status, ['waiting_dp', 'payment_failed'])) {
+        if (!in_array($booking->admin_status, ['waiting_payment', 'payment_failed'])) {
             return response()->json([
                 'message' => 'Booking tidak bisa dibatalkan setelah pembayaran diproses.',
             ], 422);
