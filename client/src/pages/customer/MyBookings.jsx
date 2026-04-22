@@ -8,7 +8,7 @@ import { bookingService } from "../../services";
 import { toastSuccess, toastError } from "../../hooks/useToast";
 import { formatRupiah } from "../../data/packages";
 
-// Phase sesuai alur: Dipesan → Bayar → Diproses Admin → Hari H → Selesai
+// Alur: Dipesan → Dibayar → Admin Proses → Hari H → Selesai
 const PHASES = [
   {
     id: "pending",
@@ -31,7 +31,7 @@ const PHASES = [
   },
   {
     id: "paid",
-    label: "Dibayar",
+    label: "Lunas",
     icon: (
       <svg
         className="w-3.5 h-3.5"
@@ -104,29 +104,71 @@ const PHASES = [
 ];
 
 const ADMIN_MSG = {
-  waiting_payment: "⏳ Menunggu pembayaran Anda",
-  payment_failed: "❌ Pembayaran gagal. Silakan coba lagi.",
-  waiting_vendor: "⚙️ Admin sedang memilih vendor terbaik untuk Anda",
-  vendor_assigned: "📨 Menunggu konfirmasi vendor",
-  vendor_confirmed: "✅ Vendor dikonfirmasi",
-  vendor_rejected: "🔄 Admin mencari vendor pengganti",
-  tech_meeting_scheduled: "📅 Tech meeting dijadwalkan — cek email Anda",
-  preparation: "🎪 Persiapan sedang berlangsung",
-  in_event: "💒 Selamat! Hari istimewa Anda",
-  completed: "🎉 Acara selesai",
+  waiting_payment: {
+    text: "⏳ Pembayaran belum diterima. Silakan selesaikan pembayaran.",
+    color: "bg-amber-50 border-amber-200 text-amber-700",
+  },
+  payment_failed: {
+    text: "❌ Pembayaran gagal. Silakan coba lagi.",
+    color: "bg-red-50 border-red-200 text-red-600",
+  },
+  waiting_vendor: {
+    text: "✅ Pembayaran diterima! Admin sedang memilih vendor terbaik untuk Anda.",
+    color: "bg-blue-50 border-blue-200 text-blue-700",
+  },
+  vendor_assigned: {
+    text: "📨 Vendor sudah dipilih, menunggu konfirmasi vendor.",
+    color: "bg-blue-50 border-blue-200 text-blue-700",
+  },
+  vendor_confirmed: {
+    text: "✅ Vendor dikonfirmasi! Admin akan menjadwalkan tech meeting.",
+    color: "bg-teal-50 border-teal-200 text-teal-700",
+  },
+  vendor_rejected: {
+    text: "🔄 Admin sedang mencari vendor pengganti untuk Anda.",
+    color: "bg-amber-50 border-amber-200 text-amber-700",
+  },
+  tech_meeting_scheduled: {
+    text: "📅 Tech meeting dijadwalkan — tim AMARANTA akan menghubungi Anda.",
+    color: "bg-purple-50 border-purple-200 text-purple-700",
+  },
+  preparation: {
+    text: "🎪 Persiapan acara sedang berjalan.",
+    color: "bg-indigo-50 border-indigo-200 text-indigo-700",
+  },
+  in_event: {
+    text: "💒 Selamat menjalani hari istimewa Anda!",
+    color: "bg-green-50 border-green-200 text-green-700",
+  },
+  completed: {
+    text: "🎉 Acara selesai. Terima kasih telah mempercayai AMARANTA!",
+    color: "bg-emerald-50 border-emerald-200 text-emerald-700",
+  },
 };
 
 function PhaseBar({ phase, adminStatus }) {
-  const stepMap = { pending: 1, paid: 2, in_event: 4, rated: 5 };
-  const adminMid = [
-    "waiting_vendor",
-    "vendor_assigned",
-    "vendor_confirmed",
-    "vendor_rejected",
-    "tech_meeting_scheduled",
-    "preparation",
-  ].includes(adminStatus);
-  const cur = adminMid ? 3 : stepMap[phase] || 1;
+  // Mapping phase + admin_status ke step 1-5
+  function getStep() {
+    if (adminStatus === "waiting_payment" || phase === "pending") return 1;
+    if (adminStatus === "payment_failed") return 1;
+    if (phase === "paid" && adminStatus === "waiting_vendor") return 2;
+    if (
+      [
+        "vendor_assigned",
+        "vendor_confirmed",
+        "vendor_rejected",
+        "tech_meeting_scheduled",
+        "preparation",
+      ].includes(adminStatus)
+    )
+      return 3;
+    if (phase === "in_event" || adminStatus === "in_event") return 4;
+    if (phase === "rated" || adminStatus === "completed") return 5;
+    // Fallback
+    const m = { pending: 1, paid: 2, in_event: 4, rated: 5 };
+    return m[phase] || 1;
+  }
+  const cur = getStep();
 
   return (
     <div className="flex items-center gap-0 overflow-x-auto pb-1">
@@ -442,12 +484,18 @@ export default function CustomerMyBookings() {
 
                 {/* Info status dari admin */}
                 {ADMIN_MSG[booking.admin_status] && (
-                  <div className="mb-4 px-3 py-2 bg-[var(--color-cream)] border border-[var(--color-cream-border)] text-xs font-[var(--font-sans)] text-[var(--color-dark-muted)]">
-                    {ADMIN_MSG[booking.admin_status]}
+                  <div
+                    className={[
+                      "mb-4 px-3 py-2 border text-xs font-[var(--font-sans)]",
+                      ADMIN_MSG[booking.admin_status].color,
+                    ].join(" ")}
+                  >
+                    {ADMIN_MSG[booking.admin_status].text}
                     {booking.vendor?.name &&
                       booking.admin_status === "vendor_confirmed" && (
-                        <span className="ml-2 font-medium text-[var(--color-dark)]">
-                          — {booking.vendor.name}
+                        <span className="ml-2 font-medium">
+                          {" "}
+                          {booking.vendor.name}
                         </span>
                       )}
                   </div>
@@ -507,6 +555,16 @@ export default function CustomerMyBookings() {
                       </svg>
                       Invoice PDF
                     </Link>
+                  )}
+
+                  {/* Bayar ulang jika payment gagal */}
+                  {booking.admin_status === "payment_failed" && (
+                    <a
+                      href={"/pesan/" + booking.package?.tier_id}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs font-[var(--font-sans)] hover:bg-[var(--color-gold-light)] transition-all"
+                    >
+                      💳 Bayar Ulang
+                    </a>
                   )}
 
                   {/* Batalkan — hanya sebelum bayar */}

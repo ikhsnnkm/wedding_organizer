@@ -489,6 +489,7 @@ export default function AdminBookings() {
         />
         {[
           { val: "all", label: "Semua" },
+          { val: "waiting_payment", label: "Menunggu Bayar" },
           { val: "waiting_vendor", label: "Pilih Vendor" },
           { val: "vendor_assigned", label: "Menunggu Vendor" },
           { val: "vendor_confirmed", label: "Vendor Konfirm" },
