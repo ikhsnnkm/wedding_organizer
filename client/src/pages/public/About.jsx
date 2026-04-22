@@ -1,5 +1,5 @@
 // ============================================================
-// src/pages/public/About.jsx — Tentang amaranta Wedding Organizer
+// src/pages/public/About.jsx — Tentang AMARANTA Wedding Organizer
 // ============================================================
 import { Link } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -52,7 +52,7 @@ const About = () => (
           <em className="text-gold-shimmer">Hari Anda Sempurna</em>
         </h1>
         <p className="text-base text-white/60 font-[var(--font-sans)] max-w-xl mx-auto leading-relaxed">
-          amaranta adalah wedding organizer profesional yang didirikan pada 2015
+          AMARANTA adalah wedding organizer profesional yang didirikan pada 2015
           dengan misi menghadirkan pengalaman pernikahan terbaik — personal,
           berkesan, dan tanpa hambatan.
         </p>
@@ -70,14 +70,14 @@ const About = () => (
             Dari Satu Pernikahan, Tumbuh Menjadi Keluarga Besar
           </h2>
           <p className="text-sm text-[var(--color-dark-muted)] font-[var(--font-sans)] leading-relaxed mb-4">
-            amaranta lahir dari pengalaman pribadi pendiri kami, Anisa Dewi,
+            AMARANTA lahir dari pengalaman pribadi pendiri kami, Anisa Dewi,
             yang merasakan betapa rumitnya merencanakan pernikahan impian tanpa
             bantuan profesional. Pada 2015, ia memutuskan untuk hadir sebagai
             solusi — menggabungkan keahlian koordinasi, jaringan vendor
             terpercaya, dan sentuhan personal yang hangat.
           </p>
           <p className="text-sm text-[var(--color-dark-muted)] font-[var(--font-sans)] leading-relaxed mb-6">
-            Kini, delapan tahun kemudian, amaranta telah menangani lebih dari
+            Kini, delapan tahun kemudian, AMARANTA telah menangani lebih dari
             500 pernikahan di seluruh Indonesia — dari pesta kecil intim hingga
             resepsi besar bintang lima. Setiap pernikahan tetap mendapat
             perhatian yang sama: penuh cinta dan dedikasi.
@@ -214,7 +214,7 @@ const About = () => (
           Siap Mulai Perjalanan Anda?
         </h2>
         <p className="text-sm text-white/60 font-[var(--font-sans)] mb-10">
-          Konsultasikan impian pernikahan Anda bersama tim amaranta — gratis,
+          Konsultasikan impian pernikahan Anda bersama tim AMARANTA — gratis,
           tanpa komitmen.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -223,12 +223,6 @@ const About = () => (
             className="px-8 py-4 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs uppercase tracking-widest font-[var(--font-sans)] font-medium hover:bg-[var(--color-gold-light)] transition-colors"
           >
             Pilih Paket
-          </Link>
-          <Link
-            to="/vendor"
-            className="px-8 py-4 border border-white/20 text-white/70 text-xs uppercase tracking-widest font-[var(--font-sans)] hover:border-[var(--color-gold)] hover:text-[var(--color-gold)] transition-all"
-          >
-            Cari Vendor
           </Link>
         </div>
       </div>

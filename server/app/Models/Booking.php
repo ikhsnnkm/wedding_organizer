@@ -3,89 +3,98 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Booking extends Model
 {
     protected $fillable = [
         'order_id', 'customer_id', 'vendor_id', 'package_id',
         'pemesan_name', 'pemesan_email', 'pemesan_phone',
-        'wedding_date', 'notes',
-        'total_price', 'dp_amount', 'dp_paid_at', 'full_paid_at',
-        'status', 'phase',
+        'wedding_date', 'location', 'konsep', 'notes',
+        'total_price', 'paid_at',          // tidak ada dp_amount / dp_paid_at
+        'status', 'admin_status', 'phase',
         'payment_method', 'midtrans_order_id',
-        'rating', 'review', 'rated_at',
-        'location', 'konsep',
-        'admin_status', 'admin_notes', 'vendor_assigned_at',
+        'vendor_assigned_at', 'admin_notes',
         'tech_meeting_at', 'tech_meeting_location',
         'tech_meeting_notes', 'tech_meeting_confirmed',
         'preparation_progress',
+        'rating', 'review', 'rated_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'wedding_date'           => 'date',
-            'dp_paid_at'             => 'datetime',
-            'full_paid_at'           => 'datetime',
-            'rated_at'               => 'datetime',
+            'paid_at'                => 'datetime',
             'vendor_assigned_at'     => 'datetime',
             'tech_meeting_at'        => 'datetime',
             'tech_meeting_confirmed' => 'boolean',
+            'rated_at'               => 'datetime',
             'total_price'            => 'integer',
-            'dp_amount'              => 'integer',
             'preparation_progress'   => 'integer',
+            'rating'                 => 'integer',
         ];
     }
 
-    public function customer()   { return $this->belongsTo(User::class, 'customer_id'); }
-    public function vendor()     { return $this->belongsTo(Vendor::class); }
-    public function package()    { return $this->belongsTo(Package::class); }
-    public function payments()   { return $this->hasMany(Payment::class); }
+    // ── Relasi ──────────────────────────────────────────────
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_id');
+    }
 
-    public function vendorRequests()
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    public function package(): BelongsTo
+    {
+        return $this->belongsTo(Package::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function vendorRequests(): HasMany
     {
         return $this->hasMany(VendorRequest::class);
     }
 
-    public function activeVendorRequest()
+    // ── Helpers ─────────────────────────────────────────────
+    // Sudah dibayar lunas
+    public function isPaid(): bool
     {
-        return $this->hasOne(VendorRequest::class)
-                    ->whereIn('status', ['pending', 'confirmed'])
-                    ->latest();
+        return !is_null($this->paid_at);
     }
 
-    public function getSisaAttribute(): int
+    // Belum dibayar
+    public function isUnpaid(): bool
     {
-        return $this->total_price - $this->dp_amount;
+        return is_null($this->paid_at);
     }
 
-    public function isDpPaid(): bool
-    {
-        return $this->payments()->where('type', 'dp')->where('status', 'success')->exists();
-    }
-
-    public function isFullPaid(): bool
-    {
-        return $this->payments()->where('type', 'full')->where('status', 'success')->exists();
-    }
-
-    public function canExecuteEvent(): bool
-    {
-        return $this->isFullPaid()
-            && $this->vendor_id !== null
-            && $this->vendorRequests()->where('status', 'confirmed')->exists();
-    }
-
+    // Admin bisa proses booking ini
     public function canAdminProcess(): bool
     {
-        return $this->isDpPaid();
+        return $this->isPaid();
     }
 
+    // Bisa eksekusi acara (sudah bayar dan vendor confirmed)
+    public function canExecuteEvent(): bool
+    {
+        return $this->isPaid() &&
+               $this->vendorRequests()->where('status', 'confirmed')->exists();
+    }
+
+    // Generate order ID unik: AMRT-XXXXXXXX
     public static function generateOrderId(): string
     {
         do {
-            $id = 'AMRT-' . strtoupper(substr(uniqid(), -8));
+            $id = 'AMRT-' . strtoupper(substr(md5(uniqid()), 0, 8));
         } while (static::where('order_id', $id)->exists());
+
         return $id;
     }
 }

@@ -126,7 +126,7 @@ class BookingWorkflowController extends Controller
     // PATCH /api/admin/bookings/{booking}/execute-event
     public function markEventExecuted(Request $request, Booking $booking): JsonResponse
     {
-        if (!$booking->isFullPaid()) {
+        if (!$booking->isPaid()) {
             return response()->json([
                 'message' => 'Acara tidak bisa dieksekusi. Pembayaran belum lunas.',
             ], 422);

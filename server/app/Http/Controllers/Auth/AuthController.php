@@ -81,7 +81,7 @@ class AuthController extends Controller
             'email'    => $request->email,
             'phone'    => $request->phone,
             'username' => explode('@', $request->email)[0] . '_' . rand(100, 999),
-            'role'     => 'customer',   // selalu customer saat daftar publik
+            'role'     => 'customer',   // SELALU customer — vendor hanya dibuat oleh admin
             'password' => $request->password,
         ]);
 

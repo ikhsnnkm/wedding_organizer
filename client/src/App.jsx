@@ -37,9 +37,7 @@ import AdminBookings from "./pages/admin/Bookings";
 // ── Vendor Panel ─────────────────────────────────────────────
 import VendorLayout from "./layouts/VendorLayout";
 import VendorDashboard from "./pages/vendor/Dashboard";
-import VendorPackages from "./pages/vendor/Packages";
 import VendorBookings from "./pages/vendor/Bookings";
-import VendorProfile from "./pages/vendor/Profile";
 
 // ── Customer ─────────────────────────────────────────────────
 import CustomerLayout from "./layouts/CustomerLayout";
@@ -162,16 +160,8 @@ function App() {
                   element={<VendorDashboard />}
                 />
                 <Route
-                  path="/vendor-panel/packages"
-                  element={<VendorPackages />}
-                />
-                <Route
                   path="/vendor-panel/bookings"
                   element={<VendorBookings />}
-                />
-                <Route
-                  path="/vendor-panel/profile"
-                  element={<VendorProfile />}
                 />
               </Route>
             </Route>

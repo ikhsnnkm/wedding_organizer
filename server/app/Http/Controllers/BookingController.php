@@ -85,10 +85,9 @@ class BookingController extends Controller
             'konsep'        => $request->konsep,
             'notes'         => $request->notes,
             'total_price'   => $package->price,
-            'dp_amount'     => $dp,
             'status'        => 'pending',
             'phase'         => 'pending',
-            'admin_status'  => 'waiting_dp',
+            'admin_status'  => 'waiting_payment',
         ]);
 
         return response()->json([
@@ -105,16 +104,16 @@ class BookingController extends Controller
             return response()->json(['message' => 'Tidak diizinkan.'], 403);
         }
 
-        // Sudah lunas
-        if ($booking->isFullPaid()) {
-            return response()->json(['message' => 'Booking ini sudah dibayar.'], 422);
+        // Sudah dibayar
+        if ($booking->isPaid()) {
+            return response()->json(['message' => 'Booking ini sudah dibayar lunas.'], 422);
         }
 
         $amount = $booking->total_price;   // langsung full
 
         $snapToken = Snap::getSnapToken([
             'transaction_details' => [
-                'order_id'     => $booking->order_id . '-PAY-' . time(),
+                'order_id'      => $booking->order_id . '-PAY-' . time(),
                 'gross_amount' => $amount,
             ],
             'customer_details' => [
@@ -208,11 +207,10 @@ class BookingController extends Controller
                 'paid_at' => now(), 'midtrans_response' => (array) $notif,
             ]);
 
-            // Full payment langsung lunas
+            // Pembayaran lunas
                 $booking->update([
-                    'phase'          => 'dp_paid',
-                    'dp_paid_at'     => now(),
-                    'full_paid_at'   => now(),
+                    'phase'          => 'paid',
+                    'paid_at'        => now(),
                     'payment_method' => $type,
                     'status'         => 'confirmed',
                     'admin_status'   => 'waiting_vendor',

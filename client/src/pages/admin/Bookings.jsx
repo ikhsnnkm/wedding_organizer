@@ -1,34 +1,14 @@
-// src/pages/admin/Bookings.jsx
-// PERUBAHAN UTAMA:
-//   + Panel workflow WO: assign vendor, tech meeting, monitor persiapan
-//   + Filter berdasarkan admin_status
-//   + Indikator status per tahap alur
-import { useState } from "react";
-import Table from "../../components/ui/Table";
+import { useState, useEffect, useCallback } from "react";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
-import Pagination from "../../components/ui/Pagination";
 import Input from "../../components/ui/Input";
+import { adminService, vendorService } from "../../services";
 import { formatRupiah } from "../../data/packages";
 
-const ADMIN_STATUS_LABELS = {
-  waiting_dp: "Menunggu DP",
-  dp_failed: "DP Gagal",
-  waiting_vendor: "Pilih Vendor",
-  vendor_assigned: "Menunggu Vendor",
-  vendor_confirmed: "Vendor Konfirm",
-  vendor_rejected: "Vendor Tolak",
-  tech_meeting_scheduled: "Tech Meeting",
-  preparation: "Persiapan",
-  in_event: "Hari H",
-  completed: "Selesai",
-  cancelled: "Dibatalkan",
-};
-
-const ADMIN_STATUS_COLOR = {
-  waiting_dp: "bg-gray-100 text-gray-600",
-  dp_failed: "bg-red-100 text-red-600",
+const STATUS_STYLE = {
+  waiting_payment: "bg-gray-100 text-gray-500",
+  payment_failed: "bg-red-100 text-red-600",
   waiting_vendor: "bg-amber-100 text-amber-700",
   vendor_assigned: "bg-blue-100 text-blue-700",
   vendor_confirmed: "bg-teal-100 text-teal-700",
@@ -37,373 +17,279 @@ const ADMIN_STATUS_COLOR = {
   preparation: "bg-indigo-100 text-indigo-700",
   in_event: "bg-green-100 text-green-700",
   completed: "bg-emerald-100 text-emerald-700",
-  cancelled: "bg-gray-100 text-gray-500",
+};
+const STATUS_LABEL = {
+  waiting_payment: "Menunggu Bayar",
+  payment_failed: "Bayar Gagal",
+  waiting_vendor: "Pilih Vendor",
+  vendor_assigned: "Menunggu Vendor",
+  vendor_confirmed: "Vendor Konfirm",
+  vendor_rejected: "Vendor Tolak",
+  tech_meeting_scheduled: "Tech Meeting",
+  preparation: "Persiapan",
+  in_event: "Hari H",
+  completed: "Selesai",
 };
 
-// Mock vendors untuk assign
-const MOCK_VENDORS = [
-  { id: 1, name: "Chateau de Lumiere", category: "Venue & Full Service" },
-  { id: 2, name: "Petals & Porcelain", category: "Dekorasi & Florist" },
-  { id: 3, name: "Julian Vesper Films", category: "Foto & Video" },
-];
-
-const MOCK_BOOKINGS = [
-  {
-    id: 1,
-    order_id: "AMRT-10012345",
-    customer: { name: "Rina & Budi" },
-    vendor: { name: "Chateau de Lumiere" },
-    package: { tier_id: "gold" },
-    wedding_date: "2025-09-15",
-    location: "Jakarta Selatan",
-    konsep: "Garden Romantic",
-    total_price: 45000000,
-    dp_amount: 13500000,
-    status: "confirmed",
-    admin_status: "waiting_vendor",
-    preparation_progress: 0,
-    vendor_requests: [],
-    tech_meeting_at: null,
-  },
-  {
-    id: 2,
-    order_id: "AMRT-10012346",
-    customer: { name: "Sofia & Doni" },
-    vendor: null,
-    package: { tier_id: "platinum" },
-    wedding_date: "2025-10-20",
-    location: "Bandung",
-    konsep: "Modern Minimalist",
-    total_price: 85000000,
-    dp_amount: 25500000,
-    status: "pending",
-    admin_status: "waiting_dp",
-    preparation_progress: 0,
-    vendor_requests: [],
-    tech_meeting_at: null,
-  },
-  {
-    id: 3,
-    order_id: "AMRT-10012347",
-    customer: { name: "Maya & Reza" },
-    vendor: { name: "Petals & Porcelain" },
-    package: { tier_id: "silver" },
-    wedding_date: "2025-08-05",
-    location: "Surabaya",
-    konsep: "Rustic Outdoor",
-    total_price: 25000000,
-    dp_amount: 7500000,
-    status: "confirmed",
-    admin_status: "preparation",
-    preparation_progress: 65,
-    vendor_requests: [
-      { id: 1, vendor: { name: "Petals & Porcelain" }, status: "confirmed" },
-    ],
-    tech_meeting_at: "2025-07-01T10:00:00",
-  },
-  {
-    id: 4,
-    order_id: "AMRT-10012348",
-    customer: { name: "Clara & Anton" },
-    vendor: null,
-    package: { tier_id: "gold" },
-    wedding_date: "2025-11-12",
-    location: "Yogyakarta",
-    konsep: "Javanese Traditional",
-    total_price: 45000000,
-    dp_amount: 13500000,
-    status: "cancelled",
-    admin_status: "dp_failed",
-    preparation_progress: 0,
-    vendor_requests: [],
-    tech_meeting_at: null,
-  },
-];
-
-function WorkflowPanel({ booking, onUpdate }) {
-  const [assignModal, setAssignModal] = useState(false);
-  const [techModal, setTechModal] = useState(false);
-  const [prepModal, setPrepModal] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState("");
+// ── Panel workflow per booking ────────────────────────────────
+function WorkflowPanel({ booking, vendors, onUpdated }) {
+  const s = booking.admin_status;
+  const [assignVendorId, setAssignVendorId] = useState("");
   const [adminNotes, setAdminNotes] = useState(booking.admin_notes || "");
   const [techForm, setTechForm] = useState({
-    date: "",
-    location: "",
-    notes: "",
+    tech_meeting_at: "",
+    tech_meeting_location: "",
+    tech_meeting_notes: "",
   });
   const [prepPct, setPrepPct] = useState(booking.preparation_progress || 0);
+  const [acting, setActing] = useState(false);
 
-  const s = booking.admin_status;
-
-  function handleAssign() {
-    if (!selectedVendor) return;
-    // nanti: adminService.assignVendor(booking.id, { vendor_id: selectedVendor })
-    onUpdate(booking.id, {
-      admin_status: "vendor_assigned",
-      vendor: MOCK_VENDORS.find((v) => v.id === Number(selectedVendor)),
-    });
-    setAssignModal(false);
+  async function doAssign() {
+    if (!assignVendorId) return;
+    setActing(true);
+    try {
+      await adminService.assignVendor(booking.id, {
+        vendor_id: Number(assignVendorId),
+        admin_notes: adminNotes,
+      });
+      onUpdated();
+    } catch (err) {
+      alert(err.userMessage || "Gagal assign vendor");
+    } finally {
+      setActing(false);
+    }
   }
 
-  function handleTechMeeting() {
-    if (!techForm.date || !techForm.location) return;
-    // nanti: adminService.setTechMeeting(booking.id, techForm)
-    onUpdate(booking.id, {
-      admin_status: "tech_meeting_scheduled",
-      tech_meeting_at: techForm.date,
-    });
-    setTechModal(false);
+  async function doReassign() {
+    if (!assignVendorId) return;
+    setActing(true);
+    try {
+      await adminService.reassignVendor(booking.id, {
+        vendor_id: Number(assignVendorId),
+      });
+      onUpdated();
+    } catch (err) {
+      alert(err.userMessage || "Gagal reassign vendor");
+    } finally {
+      setActing(false);
+    }
   }
 
-  function handleUpdatePrep() {
-    // nanti: adminService.updatePreparation(booking.id, prepPct)
-    onUpdate(booking.id, { preparation_progress: prepPct });
-    setPrepModal(false);
+  async function doTechMeeting() {
+    if (!techForm.tech_meeting_at || !techForm.tech_meeting_location) {
+      alert("Tanggal dan lokasi wajib diisi");
+      return;
+    }
+    setActing(true);
+    try {
+      await adminService.setTechMeeting(booking.id, techForm);
+      onUpdated();
+    } catch (err) {
+      alert(err.userMessage || "Gagal atur tech meeting");
+    } finally {
+      setActing(false);
+    }
   }
 
-  function handleExecute() {
-    if (!window.confirm("Tandai acara sebagai sedang berjalan?")) return;
-    // nanti: adminService.executeEvent(booking.id)
-    onUpdate(booking.id, {
-      admin_status: "in_event",
-      preparation_progress: 100,
-    });
+  async function doConfirmTech() {
+    setActing(true);
+    try {
+      await adminService.confirmTech(booking.id);
+      onUpdated();
+    } catch (err) {
+      alert(err.userMessage || "Gagal");
+    } finally {
+      setActing(false);
+    }
   }
+
+  async function doUpdatePrep() {
+    setActing(true);
+    try {
+      await adminService.updatePreparation(booking.id, prepPct);
+      onUpdated();
+    } catch (err) {
+      alert(err.userMessage || "Gagal");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function doExecute() {
+    if (!window.confirm("Tandai acara sedang berlangsung?")) return;
+    setActing(true);
+    try {
+      await adminService.executeEvent(booking.id);
+      onUpdated();
+    } catch (err) {
+      alert(
+        err.userMessage || "Gagal eksekusi. Pastikan pembayaran sudah lunas.",
+      );
+    } finally {
+      setActing(false);
+    }
+  }
+
+  const STEPS = [
+    "Bayar",
+    "Pilih Vendor",
+    "Tech Meeting",
+    "Persiapan",
+    "Eksekusi",
+  ];
+  const STEP_STATUS = [
+    "waiting_vendor",
+    "vendor_assigned",
+    "vendor_confirmed",
+    "tech_meeting_scheduled",
+    "preparation",
+    "in_event",
+  ];
+  const curIdx = STEP_STATUS.indexOf(s);
 
   return (
-    <div className="mt-4 border-t border-[var(--color-cream-border)] pt-4 space-y-3">
+    <div className="mt-5 border-t border-[var(--color-cream-border)] pt-5 space-y-4">
       <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)]">
-        Aksi Admin — Workflow WO
+        Workflow WO
       </p>
 
-      {/* Step indicator */}
-      <div className="flex items-center gap-1 flex-wrap mb-2">
-        {["DP", "Pilih Vendor", "Tech Meeting", "Persiapan", "Eksekusi"].map(
-          (step, i) => {
-            const steps = [
-              "waiting_vendor",
-              "vendor_assigned",
-              "vendor_confirmed",
-              "tech_meeting_scheduled",
-              "preparation",
-              "in_event",
-            ];
-            const currentIdx = steps.indexOf(s);
-            const done = i <= currentIdx;
-            return (
-              <div key={step} className="flex items-center gap-1">
-                <span
-                  className={[
-                    "text-[10px] px-2 py-0.5 rounded font-[var(--font-sans)]",
-                    done
-                      ? "bg-[var(--color-gold)] text-[var(--color-dark)]"
-                      : "bg-[var(--color-cream-border)] text-[var(--color-slate)]",
-                  ].join(" ")}
-                >
-                  {step}
-                </span>
-                {i < 4 && (
-                  <span className="text-[var(--color-cream-border)]">›</span>
-                )}
-              </div>
-            );
-          },
-        )}
-      </div>
-
-      {/* Aksi berdasarkan status */}
-      <div className="flex flex-wrap gap-2">
-        {/* Assign vendor — hanya saat waiting_vendor atau vendor_rejected */}
-        {(s === "waiting_vendor" || s === "vendor_rejected") && (
-          <Button size="xs" variant="gold" onClick={() => setAssignModal(true)}>
-            {s === "vendor_rejected"
-              ? "🔄 Pilih Vendor Lain"
-              : "👤 Assign Vendor"}
-          </Button>
-        )}
-
-        {/* Tech meeting — setelah vendor confirmed */}
-        {s === "vendor_confirmed" && (
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => setTechModal(true)}
-          >
-            📅 Jadwalkan Tech Meeting
-          </Button>
-        )}
-
-        {/* Konfirmasi tech meeting */}
-        {s === "tech_meeting_scheduled" && (
-          <Button
-            size="xs"
-            variant="gold"
-            onClick={() => {
-              // nanti: adminService.confirmTech(booking.id)
-              onUpdate(booking.id, { admin_status: "preparation" });
-            }}
-          >
-            ✅ Konfirmasi Tech Meeting
-          </Button>
-        )}
-
-        {/* Update progress */}
-        {s === "preparation" && (
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => setPrepModal(true)}
-          >
-            📊 Update Progress ({booking.preparation_progress}%)
-          </Button>
-        )}
-
-        {/* Eksekusi acara — hanya jika full payment lunas */}
-        {s === "preparation" && (
-          <Button size="xs" variant="primary" onClick={handleExecute}>
-            🚀 Eksekusi Acara
-          </Button>
-        )}
-      </div>
-
-      {/* Info pembayaran */}
-      <div className="text-xs text-[var(--color-slate)] font-[var(--font-sans)] space-y-0.5">
-        <p>
-          DP: {formatRupiah(booking.dp_amount)} · Sisa:{" "}
-          {formatRupiah(booking.total_price - booking.dp_amount)}
-        </p>
-        {booking.location && (
-          <p>
-            📍 {booking.location} · 🎨 {booking.konsep}
-          </p>
-        )}
-      </div>
-
-      {/* Modal Assign Vendor */}
-      <Modal
-        isOpen={assignModal}
-        onClose={() => setAssignModal(false)}
-        title="Pilih Vendor"
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setAssignModal(false)}
+      {/* Progress steps */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {STEPS.map((step, i) => (
+          <div key={step} className="flex items-center gap-1">
+            <span
+              className={[
+                "text-[10px] px-2 py-0.5 rounded font-[var(--font-sans)]",
+                i <= curIdx
+                  ? "bg-[var(--color-gold)] text-[var(--color-dark)]"
+                  : "bg-[var(--color-cream-border)] text-[var(--color-slate)]",
+              ].join(" ")}
             >
-              Batal
-            </Button>
-            <Button variant="gold" size="sm" onClick={handleAssign}>
-              Assign
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--color-slate)] font-[var(--font-sans)]">
-            Pilih vendor yang akan menangani booking{" "}
-            <strong>{booking.order_id}</strong>.
+              {step}
+            </span>
+            {i < STEPS.length - 1 && (
+              <span className="text-[var(--color-cream-border)] text-xs">
+                ›
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Assign vendor */}
+      {(s === "waiting_vendor" || s === "vendor_rejected") && (
+        <div className="space-y-3 p-4 bg-[var(--color-cream)] border border-[var(--color-cream-border)]">
+          <p className="text-xs font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
+            {s === "vendor_rejected"
+              ? "🔄 Pilih Vendor Pengganti"
+              : "👤 Assign Vendor"}
           </p>
           <select
-            value={selectedVendor}
-            onChange={(e) => setSelectedVendor(e.target.value)}
-            className="w-full border border-[var(--color-cream-border)] px-3 py-2 text-sm font-[var(--font-sans)] outline-none focus:border-[var(--color-gold)]"
+            value={assignVendorId}
+            onChange={(e) => setAssignVendorId(e.target.value)}
+            className="w-full border border-[var(--color-cream-border)] px-3 py-2 text-sm font-[var(--font-sans)] outline-none focus:border-[var(--color-gold)] bg-white"
           >
             <option value="">-- Pilih vendor --</option>
-            {MOCK_VENDORS.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.category})
-              </option>
-            ))}
+            {vendors
+              .filter((v) => v.status === "approved")
+              .map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} ({v.category || "Umum"})
+                </option>
+              ))}
           </select>
           <Input
             label="Catatan untuk Vendor (opsional)"
             value={adminNotes}
             onChange={(e) => setAdminNotes(e.target.value)}
           />
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            disabled={!assignVendorId}
+            onClick={s === "vendor_rejected" ? doReassign : doAssign}
+          >
+            {s === "vendor_rejected" ? "Assign Vendor Baru" : "Assign Vendor"}
+          </Button>
         </div>
-      </Modal>
+      )}
 
-      {/* Modal Tech Meeting */}
-      <Modal
-        isOpen={techModal}
-        onClose={() => setTechModal(false)}
-        title="Jadwalkan Tech Meeting"
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setTechModal(false)}
-            >
-              Batal
-            </Button>
-            <Button variant="gold" size="sm" onClick={handleTechMeeting}>
-              Simpan
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
+      {/* Tech meeting */}
+      {s === "vendor_confirmed" && (
+        <div className="space-y-3 p-4 bg-[var(--color-cream)] border border-[var(--color-cream-border)]">
+          <p className="text-xs font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
+            📅 Jadwalkan Tech Meeting
+          </p>
           <Input
             label="Tanggal & Waktu"
             type="datetime-local"
-            value={techForm.date}
+            value={techForm.tech_meeting_at}
             onChange={(e) =>
-              setTechForm((p) => ({ ...p, date: e.target.value }))
+              setTechForm((p) => ({ ...p, tech_meeting_at: e.target.value }))
             }
-            required
           />
           <Input
             label="Lokasi Meeting"
-            value={techForm.location}
+            value={techForm.tech_meeting_location}
             onChange={(e) =>
-              setTechForm((p) => ({ ...p, location: e.target.value }))
+              setTechForm((p) => ({
+                ...p,
+                tech_meeting_location: e.target.value,
+              }))
             }
-            placeholder="contoh: Zoom Meeting / Kantor AMARANTA"
-            required
+            placeholder="Zoom / Kantor AMARANTA / ..."
           />
-          <div>
-            <label className="text-sm font-medium text-[var(--color-dark-muted)] font-[var(--font-sans)] block mb-1">
-              Catatan
-            </label>
-            <textarea
-              rows={3}
-              value={techForm.notes}
-              onChange={(e) =>
-                setTechForm((p) => ({ ...p, notes: e.target.value }))
-              }
-              className="w-full border-b border-[var(--color-cream-border)] focus:border-[var(--color-gold)] bg-transparent text-sm font-[var(--font-sans)] outline-none py-1 resize-none"
-            />
-          </div>
+          <Input
+            label="Catatan (opsional)"
+            value={techForm.tech_meeting_notes}
+            onChange={(e) =>
+              setTechForm((p) => ({ ...p, tech_meeting_notes: e.target.value }))
+            }
+          />
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            onClick={doTechMeeting}
+          >
+            Jadwalkan
+          </Button>
         </div>
-      </Modal>
+      )}
 
-      {/* Modal Progress Persiapan */}
-      <Modal
-        isOpen={prepModal}
-        onClose={() => setPrepModal(false)}
-        title="Update Progress Persiapan"
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPrepModal(false)}
-            >
-              Batal
-            </Button>
-            <Button variant="gold" size="sm" onClick={handleUpdatePrep}>
-              Simpan
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
+      {/* Konfirmasi tech meeting */}
+      {s === "tech_meeting_scheduled" && (
+        <div className="flex items-center gap-3 p-3 bg-purple-50 border border-purple-200">
+          <div>
+            <p className="text-xs font-medium text-purple-800 font-[var(--font-sans)]">
+              Tech Meeting:{" "}
+              {booking.tech_meeting_at
+                ? new Date(booking.tech_meeting_at).toLocaleString("id-ID")
+                : "—"}
+            </p>
+            <p className="text-xs text-purple-600 font-[var(--font-sans)]">
+              Lokasi: {booking.tech_meeting_location || "—"}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            onClick={doConfirmTech}
+          >
+            ✅ Konfirmasi Sudah Terlaksana
+          </Button>
+        </div>
+      )}
+
+      {/* Update progress */}
+      {s === "preparation" && (
+        <div className="space-y-3 p-4 bg-[var(--color-cream)] border border-[var(--color-cream-border)]">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-[var(--font-sans)] text-[var(--color-dark)]">
-              Progress: {prepPct}%
-            </span>
+            <p className="text-xs font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
+              📊 Progress Persiapan: {prepPct}%
+            </p>
           </div>
           <input
             type="range"
@@ -414,134 +300,153 @@ function WorkflowPanel({ booking, onUpdate }) {
             onChange={(e) => setPrepPct(Number(e.target.value))}
             className="w-full"
           />
-          <div className="h-3 bg-[var(--color-cream-border)] rounded-full overflow-hidden">
+          <div className="h-2 bg-[var(--color-cream-border)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[var(--color-gold)] transition-all duration-300 rounded-full"
+              className="h-full bg-[var(--color-gold)] rounded-full transition-all"
               style={{ width: prepPct + "%" }}
             />
           </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              isLoading={acting}
+              onClick={doUpdatePrep}
+            >
+              Simpan Progress
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              isLoading={acting}
+              onClick={doExecute}
+            >
+              🚀 Eksekusi Acara
+            </Button>
+          </div>
         </div>
-      </Modal>
+      )}
+
+      {/* Info detail acara */}
+      <div className="grid grid-cols-2 gap-2 text-xs font-[var(--font-sans)]">
+        {[
+          { l: "Tgl. Nikah", v: booking.wedding_date },
+          { l: "Lokasi", v: booking.location },
+          { l: "Konsep", v: booking.konsep },
+          { l: "Total", v: formatRupiah(booking.total_price) },
+        ]
+          .filter((x) => x.v)
+          .map(({ l, v }) => (
+            <div key={l}>
+              <span className="text-[var(--color-slate)]">{l}: </span>
+              <span className="text-[var(--color-dark)] font-medium">{v}</span>
+            </div>
+          ))}
+      </div>
+
+      {/* Riwayat vendor request */}
+      {booking.vendor_requests?.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)] mb-2">
+            Riwayat Vendor
+          </p>
+          {booking.vendor_requests.map((vr, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 py-1.5 border-b border-[var(--color-cream-border)] last:border-0"
+            >
+              <span
+                className={[
+                  "text-[10px] px-2 py-0.5 rounded font-[var(--font-sans)]",
+                  vr.status === "confirmed"
+                    ? "bg-green-100 text-green-700"
+                    : vr.status === "rejected"
+                      ? "bg-red-100 text-red-600"
+                      : "bg-amber-100 text-amber-700",
+                ].join(" ")}
+              >
+                {vr.status}
+              </span>
+              <span className="text-xs text-[var(--color-dark)] font-[var(--font-sans)]">
+                {vr.vendor?.name || "—"}
+              </span>
+              {vr.rejection_reason && (
+                <span className="text-xs text-[var(--color-slate)] font-[var(--font-sans)] truncate">
+                  — {vr.rejection_reason}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function AdminBookings() {
-  const [bookings, setBookings] = useState(MOCK_BOOKINGS);
+// ── Halaman Utama ─────────────────────────────────────────────
+export default function AdminBookings() {
+  const [bookings, setBookings] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
-  const [detail, setDetail] = useState(null);
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
+  const [detail, setDetail] = useState(null);
+  const PER_PAGE = 8;
 
-  function handleUpdate(id, changes) {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...changes } : b)),
-    );
-    // Tutup detail modal jika ada perubahan
-    if (detail?.id === id) setDetail((prev) => ({ ...prev, ...changes }));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [bData, vData] = await Promise.all([
+        adminService.getBookings(),
+        adminService.getVendors(),
+      ]);
+      setBookings(Array.isArray(bData) ? bData : bData.data || []);
+      setVendors(Array.isArray(vData) ? vData : vData.data || []);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Refresh detail jika sedang dibuka
+  async function handleUpdated() {
+    await load();
+    if (detail) {
+      setDetail((prev) => {
+        const fresh = bookings.find((b) => b.id === prev?.id);
+        return fresh || prev;
+      });
+    }
   }
 
-  const filtered = bookings.filter(
-    (b) => filter === "all" || b.admin_status === filter,
-  );
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  const needActionCount = bookings.filter((b) =>
+  const needAction = bookings.filter((b) =>
     ["waiting_vendor", "vendor_rejected", "vendor_confirmed"].includes(
       b.admin_status,
     ),
   ).length;
 
-  const COLUMNS = [
-    {
-      key: "order_id",
-      label: "Pesanan",
-      render: (row) => (
-        <div>
-          <p className="text-xs font-mono text-[var(--color-gold)]">
-            {row.order_id}
-          </p>
-          <p className="text-sm font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
-            {row.customer?.name}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: "detail",
-      label: "Detail Acara",
-      render: (row) => (
-        <div className="text-xs font-[var(--font-sans)]">
-          <p className="text-[var(--color-dark)]">{row.wedding_date}</p>
-          <p className="text-[var(--color-slate)]">📍 {row.location}</p>
-          <p className="text-[var(--color-slate)]">🎨 {row.konsep}</p>
-        </div>
-      ),
-    },
-    {
-      key: "vendor",
-      label: "Vendor",
-      render: (row) => (
-        <span className="text-xs font-[var(--font-sans)]">
-          {row.vendor ? (
-            row.vendor.name
-          ) : (
-            <span className="text-[var(--color-slate)] italic">
-              Belum dipilih
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: "admin_status",
-      label: "Status Admin",
-      render: (row) => (
-        <span
-          className={[
-            "text-xs px-2 py-1 font-[var(--font-sans)] rounded",
-            ADMIN_STATUS_COLOR[row.admin_status] || "bg-gray-100 text-gray-600",
-          ].join(" ")}
-        >
-          {ADMIN_STATUS_LABELS[row.admin_status] || row.admin_status}
-        </span>
-      ),
-    },
-    {
-      key: "prep",
-      label: "Persiapan",
-      render: (row) => (
-        <div className="w-24">
-          <div className="flex justify-between text-[10px] font-[var(--font-sans)] mb-1">
-            <span className="text-[var(--color-slate)]">Progress</span>
-            <span className="text-[var(--color-gold)]">
-              {row.preparation_progress}%
-            </span>
-          </div>
-          <div className="h-1.5 bg-[var(--color-cream-border)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[var(--color-gold)] rounded-full transition-all"
-              style={{ width: row.preparation_progress + "%" }}
-            />
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      render: (row) => (
-        <Button size="xs" variant="outline" onClick={() => setDetail(row)}>
-          Detail
-        </Button>
-      ),
-    },
-  ];
+  const filtered = bookings
+    .filter((b) => filter === "all" || b.admin_status === filter)
+    .filter(
+      (b) =>
+        !search ||
+        b.order_id?.includes(search) ||
+        b.pemesan_name?.toLowerCase().includes(search.toLowerCase()) ||
+        b.location?.toLowerCase().includes(search.toLowerCase()),
+    );
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
-      <div className="mb-8">
+      {/* Header */}
+      <div className="mb-6">
         <h1 className="font-[var(--font-display)] text-3xl text-[var(--color-dark)] mb-1">
           Manajemen Booking
         </h1>
@@ -551,20 +456,22 @@ function AdminBookings() {
         </p>
       </div>
 
-      {/* Alert: butuh tindakan */}
-      {needActionCount > 0 && (
-        <div className="mb-6 px-5 py-4 bg-amber-50 border border-amber-200 flex items-center justify-between">
+      {/* Alert butuh aksi */}
+      {needAction > 0 && (
+        <div className="mb-5 flex items-center justify-between px-5 py-4 bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-3">
-            <span className="w-7 h-7 bg-amber-200 rounded-full flex items-center justify-center text-amber-700 font-bold text-sm">
-              {needActionCount}
+            <span className="w-7 h-7 bg-amber-200 rounded-full flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
+              {needAction}
             </span>
-            <p className="text-sm text-amber-800 font-[var(--font-sans)] font-medium">
-              Booking membutuhkan tindakan Anda (assign vendor / konfirmasi
-              vendor)
+            <p className="text-sm font-medium text-amber-800 font-[var(--font-sans)]">
+              {needAction} booking perlu tindakan Anda
             </p>
           </div>
           <button
-            onClick={() => setFilter("waiting_vendor")}
+            onClick={() => {
+              setFilter("waiting_vendor");
+              setPage(1);
+            }}
             className="text-xs text-amber-700 hover:underline font-[var(--font-sans)]"
           >
             Lihat →
@@ -572,12 +479,20 @@ function AdminBookings() {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      {/* Filter + Search */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <input
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Cari order ID, nama, lokasi..."
+          className="flex-1 min-w-[200px] px-3 py-2 border border-[var(--color-cream-border)] bg-white text-sm font-[var(--font-sans)] outline-none focus:border-[var(--color-gold)] transition-colors"
+        />
         {[
           { val: "all", label: "Semua" },
-          { val: "waiting_dp", label: "Menunggu DP" },
-          { val: "waiting_vendor", label: "Perlu Vendor" },
+          { val: "waiting_vendor", label: "Pilih Vendor" },
           { val: "vendor_assigned", label: "Menunggu Vendor" },
           { val: "vendor_confirmed", label: "Vendor Konfirm" },
           { val: "preparation", label: "Persiapan" },
@@ -590,10 +505,10 @@ function AdminBookings() {
               setPage(1);
             }}
             className={[
-              "px-3 py-1.5 text-xs uppercase tracking-widest font-[var(--font-sans)] border transition-all",
+              "px-3 py-2 text-xs uppercase tracking-widest font-[var(--font-sans)] border transition-all",
               filter === f.val
                 ? "bg-[var(--color-dark)] text-[var(--color-cream)] border-[var(--color-dark)]"
-                : "border-[var(--color-cream-border)] text-[var(--color-dark-muted)] hover:border-[var(--color-dark)]",
+                : "bg-white border-[var(--color-cream-border)] text-[var(--color-dark-muted)] hover:border-[var(--color-dark)]",
             ].join(" ")}
           >
             {f.label}
@@ -601,85 +516,209 @@ function AdminBookings() {
         ))}
       </div>
 
-      <div className="bg-white border border-[var(--color-cream-border)] mb-6">
-        <Table columns={COLUMNS} data={paginated} rowKey="id" />
-      </div>
-      <Pagination
-        currentPage={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-      />
+      {/* Tabel */}
+      {loading ? (
+        <div className="text-center py-20">
+          <div className="inline-block w-8 h-8 border-2 border-[var(--color-gold)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className="bg-white border border-[var(--color-cream-border)] overflow-hidden mb-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm font-[var(--font-sans)]">
+                <thead>
+                  <tr className="bg-[var(--color-cream)] border-b border-[var(--color-cream-border)]">
+                    {[
+                      "Order",
+                      "Pemesan",
+                      "Paket",
+                      "Tgl Acara",
+                      "Lokasi",
+                      "Vendor",
+                      "Status",
+                      "Progress",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--color-slate)] whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((b) => (
+                    <tr
+                      key={b.id}
+                      className="border-b border-[var(--color-cream-border)] last:border-0 hover:bg-[var(--color-cream)] transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-mono text-[var(--color-gold)]">
+                          {b.order_id}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-[var(--color-dark)]">
+                          {b.pemesan_name}
+                        </p>
+                        <p className="text-xs text-[var(--color-slate)]">
+                          {b.pemesan_phone}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={[
+                            "text-xs px-2 py-0.5 rounded capitalize",
+                            {
+                              silver: "bg-gray-100 text-gray-600",
+                              gold: "bg-amber-50 text-amber-700",
+                              platinum: "bg-purple-50 text-purple-700",
+                            }[b.package?.tier_id] ||
+                              "bg-gray-100 text-gray-600",
+                          ].join(" ")}
+                        >
+                          {b.package?.tier_id || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-[var(--color-dark-muted)] whitespace-nowrap">
+                        {b.wedding_date || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--color-slate)] max-w-[120px] truncate">
+                        {b.location || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-dark-muted)]">
+                        {b.vendor?.name || (
+                          <span className="text-[var(--color-slate)] italic">
+                            Belum
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={[
+                            "text-[10px] px-2 py-0.5 rounded font-[var(--font-sans)]",
+                            STATUS_STYLE[b.admin_status] ||
+                              "bg-gray-100 text-gray-500",
+                          ].join(" ")}
+                        >
+                          {STATUS_LABEL[b.admin_status] || b.admin_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {b.preparation_progress > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-[var(--color-cream-border)] rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-[var(--color-gold)] rounded-full"
+                                style={{ width: b.preparation_progress + "%" }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-[var(--color-slate)] font-[var(--font-sans)]">
+                              {b.preparation_progress}%
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setDetail(b)}
+                          className="text-xs px-3 py-1.5 border border-[var(--color-cream-border)] text-[var(--color-dark-muted)] hover:border-[var(--color-gold)] hover:text-[var(--color-gold)] font-[var(--font-sans)] transition-all whitespace-nowrap"
+                        >
+                          Kelola
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {filtered.length === 0 && (
+            <p className="text-center py-12 text-sm text-[var(--color-slate)] font-[var(--font-sans)]">
+              Tidak ada booking ditemukan.
+            </p>
+          )}
+
+          {/* Paginasi */}
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={[
+                    "w-8 h-8 text-xs font-[var(--font-sans)] border transition-all",
+                    page === p
+                      ? "bg-[var(--color-dark)] text-[var(--color-cream)] border-[var(--color-dark)]"
+                      : "border-[var(--color-cream-border)] text-[var(--color-dark-muted)] hover:border-[var(--color-dark)]",
+                  ].join(" ")}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Modal detail + workflow */}
       <Modal
         isOpen={!!detail}
         onClose={() => setDetail(null)}
-        title={detail ? detail.order_id + " — " + detail.customer?.name : ""}
+        title={detail ? detail.order_id + " — " + detail.pemesan_name : ""}
         size="xl"
       >
         {detail && (
-          <div className="space-y-4">
+          <div>
             {/* Info booking */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
               {[
-                { label: "Tanggal", value: detail.wedding_date },
-                { label: "Lokasi", value: detail.location },
-                { label: "Konsep", value: detail.konsep },
-                { label: "Paket", value: detail.package?.tier_id },
-                { label: "Total", value: formatRupiah(detail.total_price) },
-                { label: "DP", value: formatRupiah(detail.dp_amount) },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="border border-[var(--color-cream-border)] p-3"
-                >
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)]">
-                    {item.label}
-                  </p>
-                  <p className="text-sm font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Riwayat vendor request */}
-            {detail.vendor_requests?.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)] mb-2">
-                  Riwayat Vendor
-                </p>
-                {detail.vendor_requests.map((vr, i) => (
+                { l: "Paket", v: detail.package?.tier_id },
+                { l: "Tgl Nikah", v: detail.wedding_date },
+                { l: "Lokasi", v: detail.location },
+                { l: "Konsep", v: detail.konsep },
+                { l: "Total", v: formatRupiah(detail.total_price) },
+                { l: "HP", v: detail.pemesan_phone },
+              ]
+                .filter((x) => x.v)
+                .map(({ l, v }) => (
                   <div
-                    key={i}
-                    className="flex items-center gap-3 py-2 border-b border-[var(--color-cream-border)] last:border-0"
+                    key={l}
+                    className="border border-[var(--color-cream-border)] p-3"
                   >
-                    <span
-                      className={[
-                        "text-xs px-2 py-0.5 rounded font-[var(--font-sans)]",
-                        vr.status === "confirmed"
-                          ? "bg-green-100 text-green-700"
-                          : vr.status === "rejected"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-700",
-                      ].join(" ")}
-                    >
-                      {vr.status}
-                    </span>
-                    <span className="text-sm text-[var(--color-dark)] font-[var(--font-sans)]">
-                      {vr.vendor?.name}
-                    </span>
+                    <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)]">
+                      {l}
+                    </p>
+                    <p className="text-sm font-medium text-[var(--color-dark)] font-[var(--font-sans)] capitalize">
+                      {v}
+                    </p>
                   </div>
                 ))}
+            </div>
+            {detail.notes && (
+              <div className="mb-2 px-3 py-2 bg-[var(--color-cream)] border border-[var(--color-cream-border)]">
+                <p className="text-[10px] uppercase tracking-widest text-[var(--color-slate)] font-[var(--font-sans)] mb-1">
+                  Catatan
+                </p>
+                <p className="text-xs text-[var(--color-dark-muted)] font-[var(--font-sans)]">
+                  {detail.notes}
+                </p>
               </div>
             )}
 
-            {/* Panel workflow */}
             <WorkflowPanel
               booking={detail}
-              onUpdate={(id, changes) => {
-                handleUpdate(id, changes);
-                setDetail((prev) => ({ ...prev, ...changes }));
+              vendors={vendors}
+              onUpdated={async () => {
+                await load();
+                // Refresh detail dengan data terbaru
+                const fresh = await adminService.getBookings();
+                const arr = Array.isArray(fresh) ? fresh : fresh.data || [];
+                const updated = arr.find((b) => b.id === detail.id);
+                if (updated) setDetail(updated);
               }}
             />
           </div>
@@ -688,5 +727,3 @@ function AdminBookings() {
     </div>
   );
 }
-
-export default AdminBookings;

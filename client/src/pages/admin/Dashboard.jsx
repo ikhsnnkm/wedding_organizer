@@ -175,7 +175,7 @@ const ALL_BOOKINGS = [
     location: "Jakarta",
     konsep: "Royal",
     total_price: 85000000,
-    admin_status: "waiting_dp",
+    admin_status: "waiting_payment",
     label: "Menunggu DP",
     urgency: "none",
   },
