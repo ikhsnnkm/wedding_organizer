@@ -75,6 +75,12 @@ class Booking extends Model
         return is_null($this->paid_at);
     }
 
+    // Alias untuk kompatibilitas kode lama
+    public function isFullPaid(): bool
+    {
+        return $this->isPaid();
+    }
+
     // Admin bisa proses booking ini
     public function canAdminProcess(): bool
     {

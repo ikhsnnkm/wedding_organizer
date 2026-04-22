@@ -171,12 +171,19 @@ class BookingController extends Controller
     {
         $vendor = $request->user()->vendor;
         if (!$vendor) {
-            return response()->json(['message' => 'Profil vendor tidak ditemukan.'], 404);
+            return response()->json(['message' => 'Akun ini tidak memiliki profil vendor.'], 403);
         }
-        $requests = VendorRequest::with(['booking.customer', 'booking.package', 'assignedBy'])
+
+        $requests = VendorRequest::with([
+            'booking.customer',
+            'booking.package',
+            'booking.payments',
+            'assignedBy',
+        ])
             ->where('vendor_id', $vendor->id)
             ->latest()
             ->get();
+
         return response()->json(['data' => $requests]);
     }
 

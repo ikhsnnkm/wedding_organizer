@@ -22,8 +22,8 @@ class AdminController extends Controller
                 'total_users'           => User::count(),
                 'total_bookings'        => Booking::count(),
                 'active_bookings'       => Booking::whereIn('status', ['pending', 'confirmed'])->count(),
-                'total_revenue'         => Booking::where('status', 'completed')->sum('total_price'),
-                'total_dp'              => Booking::whereNotNull('dp_paid_at')->sum('dp_amount'),
+                'total_revenue'         => Booking::whereNotNull('paid_at')->sum('total_price'),
+                'total_revenue_paid'    => Booking::whereNotNull('paid_at')->sum('total_price'),
                 // Workflow stats baru
                 'need_vendor'           => Booking::where('admin_status', 'waiting_vendor')->count(),
                 'vendor_rejected'       => Booking::where('admin_status', 'vendor_rejected')->count(),
