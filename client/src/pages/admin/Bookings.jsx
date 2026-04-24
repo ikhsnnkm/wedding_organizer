@@ -130,6 +130,36 @@ function WorkflowPanel({ booking, vendors, onUpdated }) {
     }
   }
 
+  async function doMarkPaid() {
+    if (!window.confirm("Tandai booking ini sudah dibayar?")) return;
+    setActing(true);
+    try {
+      // Update langsung via admin endpoint
+      const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+      const token =
+        sessionStorage.getItem("amaranta_token") ||
+        localStorage.getItem("amaranta_token");
+      const res = await fetch(`${API}/admin/bookings/${booking.id}/mark-paid`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: "Bearer " + token,
+        },
+      });
+      if (res.ok) {
+        onUpdated();
+      } else {
+        const d = await res.json();
+        alert(d.message || "Gagal");
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setActing(false);
+    }
+  }
+
   const STEPS = [
     "Bayar",
     "Pilih Vendor",
@@ -175,6 +205,28 @@ function WorkflowPanel({ booking, vendors, onUpdated }) {
           </div>
         ))}
       </div>
+
+      {/* Tandai sudah bayar — untuk bypass webhook Midtrans di dev */}
+      {(s === "waiting_payment" ||
+        s === "waiting_dp" ||
+        s === "payment_failed") && (
+        <div className="p-4 bg-amber-50 border border-amber-200 space-y-2">
+          <p className="text-xs font-medium text-amber-800 font-[var(--font-sans)]">
+            💰 Booking ini belum berstatus dibayar
+          </p>
+          <p className="text-xs text-amber-600 font-[var(--font-sans)]">
+            Jika Midtrans sudah konfirmasi pembayaran, tandai manual di sini.
+          </p>
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            onClick={doMarkPaid}
+          >
+            ✅ Tandai Sudah Bayar
+          </Button>
+        </div>
+      )}
 
       {/* Assign vendor */}
       {(s === "waiting_vendor" || s === "vendor_rejected") && (

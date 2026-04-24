@@ -143,4 +143,27 @@ class BookingWorkflowController extends Controller
             'data'    => $booking->fresh(),
         ]);
     }
+
+    // PATCH /api/admin/bookings/{id}/mark-paid
+    // Admin tandai booking sudah dibayar (manual, untuk development)
+    // Di production, ini dilakukan otomatis oleh Midtrans webhook
+    public function markPaid(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->isPaid()) {
+            return response()->json(['message' => 'Booking sudah dibayar.'], 422);
+        }
+
+        $booking->update([
+            'phase'        => 'paid',
+            'paid_at'      => now(),
+            'status'       => 'confirmed',
+            'admin_status' => 'waiting_vendor',
+        ]);
+
+        return response()->json([
+            'message' => 'Booking ditandai sudah dibayar.',
+            'data'    => $booking->fresh(),
+        ]);
+    }
+
 }

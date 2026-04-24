@@ -55,7 +55,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bookings/{booking}/pay',           [BookingController::class, 'pay']);
     Route::patch('/bookings/{booking}/reschedule',   [BookingController::class, 'reschedule']);
     Route::patch('/bookings/{booking}/cancel',       [BookingController::class, 'cancel']);
-    Route::patch('/bookings/{booking}/cancel',       [BookingController::class, 'cancel']);
     Route::post('/bookings/{booking}/rate',          [BookingController::class, 'rate']);
 
     // Vendor confirm/reject request
@@ -85,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Bookings + workflow WO
         Route::get('/bookings',                                  [AdminController::class, 'bookings']);
+        Route::patch('/bookings/{booking}/mark-paid',          [BookingWorkflowController::class, 'markPaid']);
         Route::patch('/bookings/{booking}/assign-vendor',        [BookingWorkflowController::class, 'assignVendor']);
         Route::patch('/bookings/{booking}/reassign-vendor',      [BookingWorkflowController::class, 'reassignVendor']);
         Route::post('/bookings/{booking}/tech-meeting',          [BookingWorkflowController::class, 'setTechMeeting']);
