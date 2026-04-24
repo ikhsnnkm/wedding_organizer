@@ -111,6 +111,20 @@ class BookingWorkflowController extends Controller
     {
         $request->validate([
             'preparation_progress' => 'required|integer|min:0|max:100',
+            'catatan'              => 'required|string|min:10',
+        ]);
+
+        $lastProgress = $booking->preparation_progress ?? 0;
+        $isRevision   = $request->preparation_progress < $lastProgress;
+
+        // Simpan ke log
+        \App\Models\BookingProgressLog::create([
+            'booking_id'  => $booking->id,
+            'admin_id'    => $request->user()->id,
+            'progress'    => $request->preparation_progress,
+            'catatan'     => $request->catatan,
+            'is_revision' => $isRevision,
+            'created_at'  => now(),
         ]);
 
         $booking->update([
@@ -119,7 +133,7 @@ class BookingWorkflowController extends Controller
 
         return response()->json([
             'message' => 'Progress diperbarui: ' . $request->preparation_progress . '%',
-            'data'    => $booking->fresh(),
+            'data'    => $booking->fresh(['progressLogs.admin']),
         ]);
     }
 
@@ -166,4 +180,23 @@ class BookingWorkflowController extends Controller
         ]);
     }
 
+    // GET /api/admin/bookings/{booking}/progress-log
+    public function progressLog(Request $request, Booking $booking): JsonResponse
+    {
+        $logs = $booking->progressLogs()
+            ->with('admin:id,name')
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(fn($l) => [
+                'progress'   => $l->progress,
+                'catatan'    => $l->catatan,
+                'is_revision'=> $l->is_revision,
+                'updated_by' => $l->admin->name ?? 'Admin',
+                'created_at' => $l->created_at->format('Y-m-d H:i'),
+            ]);
+
+        return response()->json(['data' => $logs]);
+    }
+
+    // PATCH /api/admin/bookings/{booking}/mark-paid
 }

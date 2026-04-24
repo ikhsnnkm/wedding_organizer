@@ -488,13 +488,29 @@ export default function BookingForm() {
                     </div>
                   ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-[var(--color-gold)]/20 flex justify-between">
-                <span className="text-sm text-[var(--color-dark-muted)] font-[var(--font-sans)]">
-                  Total Pembayaran
-                </span>
-                <span className="font-[var(--font-display)] text-xl text-[var(--color-gold)]">
-                  {formatRupiah(pkg.price)}
-                </span>
+              <div className="mt-3 pt-3 border-t border-[var(--color-gold)]/20 space-y-1">
+                <div className="flex justify-between text-xs font-[var(--font-sans)]">
+                  <span className="text-[var(--color-slate)]">Total Paket</span>
+                  <span className="text-[var(--color-dark)]">
+                    {formatRupiah(pkg.price)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs font-[var(--font-sans)]">
+                  <span className="text-[var(--color-slate)]">
+                    Sisa Pelunasan (70%)
+                  </span>
+                  <span className="text-[var(--color-dark-muted)]">
+                    {formatRupiah(Math.round(pkg.price * 0.7))} — dibayar nanti
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline pt-1 border-t border-[var(--color-gold)]/20">
+                  <span className="text-sm font-medium text-[var(--color-dark)] font-[var(--font-sans)]">
+                    Bayar DP Sekarang (30%)
+                  </span>
+                  <span className="font-[var(--font-display)] text-xl text-[var(--color-gold)]">
+                    {formatRupiah(Math.round(pkg.price * 0.3))}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -568,7 +584,7 @@ export default function BookingForm() {
                 onClick={handlePay}
                 disabled={!method}
               >
-                Bayar {formatRupiah(pkg.price)}
+                Bayar DP {formatRupiah(Math.round(pkg.price * 0.3))}
               </Button>
             </div>
           </div>

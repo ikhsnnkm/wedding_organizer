@@ -72,6 +72,7 @@ export const PACKAGES = [
     color: "#A8B8C8",
     popular: false,
     guests: "50–100 tamu",
+    maxGuests: 100,
     duration: "6 jam",
     // Gambar bisa diedit dari vendor panel
     img: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800&q=80",
@@ -120,6 +121,7 @@ export const PACKAGES = [
     color: "#C9A96E",
     popular: true,
     guests: "100–200 tamu",
+    maxGuests: 200,
     duration: "8 jam",
     img: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=80",
     includes: [
@@ -172,6 +174,7 @@ export const PACKAGES = [
     color: "#B8A9C9",
     popular: false,
     guests: "200–500 tamu",
+    maxGuests: 500,
     duration: "10 jam",
     img: "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&q=80",
     includes: [

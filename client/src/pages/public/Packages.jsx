@@ -88,11 +88,11 @@ function Packages() {
                     : "border-[var(--color-cream-border)] hover:border-[var(--color-gold)]/50 hover:shadow-[var(--shadow-luxury)]",
                 ].join(" ")}
               >
-                {/* Badge populer */}
+                {/* Badge populer — lebih menonjol */}
                 {pkg.popular && (
-                  <div className="absolute -top-3.5 left-0 right-0 flex justify-center">
-                    <span className="px-4 py-1 bg-[var(--color-gold)] text-[var(--color-dark)] text-[10px] uppercase tracking-widest font-[var(--font-sans)] font-medium">
-                      Paling Populer
+                  <div className="absolute -top-4 left-0 right-0 flex justify-center z-10">
+                    <span className="px-5 py-1.5 bg-[var(--color-gold)] text-[var(--color-dark)] text-[11px] uppercase tracking-[0.2em] font-[var(--font-sans)] font-bold shadow-[var(--shadow-gold)]">
+                      ★ Paling Populer ★
                     </span>
                   </div>
                 )}
