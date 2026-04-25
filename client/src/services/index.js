@@ -41,8 +41,8 @@ export const bookingService = {
   getMy: () => api.get(BOOKINGS.MY).then(d),
   getById: (id) => api.get(BOOKINGS.DETAIL(id)).then(d),
   create: (data) => api.post(BOOKINGS.CREATE, data).then(d),
-  pay: (id) => api.post(BOOKINGS.PAY(id)).then(d),
-  reschedule: (id, data) => api.patch(BOOKINGS.RESCHEDULE(id), data).then(d),
+  payDp: (id) => api.post(BOOKINGS.PAY_DP(id)).then(d),
+  payFull: (id) => api.post(BOOKINGS.PAY_FULL(id)).then(d),
   rate: (id, data) => api.post(BOOKINGS.RATE(id), data).then(d),
 };
 

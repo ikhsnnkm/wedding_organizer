@@ -1,5 +1,7 @@
+// Pakai VITE_API_URL dari .env
+// Vite proxy di vite.config.js akan forward /api/* ke Laravel
 export const BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 export const AUTH = {
   LOGIN: `${BASE_URL}/auth/login`,
@@ -32,8 +34,8 @@ export const BOOKINGS = {
   VENDOR_INBOX: `${BASE_URL}/bookings/vendor`,
   DETAIL: (id) => `${BASE_URL}/bookings/${id}`,
   CREATE: `${BASE_URL}/bookings`,
-  PAY: (id) => `${BASE_URL}/bookings/${id}/pay`, // endpoint tunggal
-  RESCHEDULE: (id) => `${BASE_URL}/bookings/${id}/reschedule`,
+  PAY_DP: (id) => `${BASE_URL}/bookings/${id}/pay-dp`,
+  PAY_FULL: (id) => `${BASE_URL}/bookings/${id}/pay-full`,
   RATE: (id) => `${BASE_URL}/bookings/${id}/rate`,
 };
 

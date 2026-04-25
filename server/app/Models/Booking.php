@@ -11,7 +11,7 @@ class Booking extends Model
     protected $fillable = [
         'order_id', 'customer_id', 'vendor_id', 'package_id',
         'pemesan_name', 'pemesan_email', 'pemesan_phone',
-        'wedding_date', 'location', 'konsep', 'notes',
+        'wedding_date', 'location', 'konsep', 'guest_count', 'notes',
         'total_price', 'dp_amount',
         'dp_paid_at', 'full_paid_at', 'paid_at',
         'status', 'admin_status', 'phase',

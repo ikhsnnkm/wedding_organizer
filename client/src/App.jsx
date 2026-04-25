@@ -123,6 +123,9 @@ function App() {
           <Route path="/tentang" element={<About />} />
           {/* /pesan/:tierId — form pemesanan langsung, butuh login */}
 
+          {/* ── PUBLIC ROUTES (after booking) ── */}
+          <Route path="/pelanggan/invoice/:id" element={<CustomerInvoice />} />
+
           {/* ── GUEST ONLY (redirect jika sudah login) ── */}
           <Route element={<GuestRoute />}>
             <Route path="/masuk" element={<Login />} />
@@ -167,12 +170,6 @@ function App() {
             </Route>
 
             {/* Invoice — full screen, tanpa CustomerLayout */}
-            <Route element={<RoleRoute allowedRoles={["customer"]} />}>
-              <Route
-                path="/pelanggan/invoice/:id"
-                element={<CustomerInvoice />}
-              />
-            </Route>
 
             {/* Customer */}
             <Route element={<RoleRoute allowedRoles={["customer"]} />}>

@@ -201,4 +201,102 @@ class BookingController extends Controller
             'type'       => 'full',
         ]);
     }
+
+    // PATCH /api/bookings/{id}/cancel
+    public function cancel(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        if (!in_array($booking->admin_status, ['waiting_dp', 'waiting_payment', 'payment_failed'])) {
+            return response()->json([
+                'message' => 'Booking tidak bisa dibatalkan setelah pembayaran diproses.',
+            ], 422);
+        }
+
+        if ($booking->status === 'cancelled') {
+            return response()->json(['message' => 'Booking sudah dibatalkan.'], 422);
+        }
+
+        $booking->update([
+            'status'       => 'cancelled',
+            'admin_status' => 'cancelled',
+        ]);
+
+        return response()->json([
+            'message' => 'Booking berhasil dibatalkan.',
+            'data'    => $booking->fresh(),
+        ]);
+    }
+
+    // POST /api/bookings/{id}/rate
+    public function rate(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        if ($booking->phase !== 'in_event') {
+            return response()->json(['message' => 'Penilaian hanya bisa diberikan setelah acara berlangsung.'], 422);
+        }
+
+        if ($booking->rating) {
+            return response()->json(['message' => 'Anda sudah memberikan penilaian.'], 422);
+        }
+
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'review' => 'sometimes|nullable|string|max:1000',
+        ]);
+
+        $booking->update([
+            'rating'   => $request->rating,
+            'review'   => $request->review,
+            'rated_at' => now(),
+            'phase'    => 'rated',
+            'admin_status' => 'completed',
+            'status'   => 'completed',
+        ]);
+
+        return response()->json([
+            'message' => 'Terima kasih atas penilaian Anda!',
+            'data'    => $booking->fresh(),
+        ]);
+    }
+
+    // GET /api/bookings/booked-dates
+    public function bookedDates(): JsonResponse
+    {
+        $dates = Booking::whereNotIn('status', ['cancelled'])
+            ->whereNotNull('wedding_date')
+            ->pluck('wedding_date')
+            ->map(fn($d) => $d instanceof \Carbon\Carbon ? $d->format('Y-m-d') : substr($d, 0, 10))
+            ->unique()
+            ->values();
+
+        return response()->json(['data' => $dates]);
+    }
+
+    // GET /api/bookings/vendor
+    public function vendorInbox(Request $request): JsonResponse
+    {
+        $vendor = $request->user()->vendor;
+        if (!$vendor) {
+            return response()->json(['message' => 'Akun ini tidak memiliki profil vendor.'], 403);
+        }
+
+        $requests = VendorRequest::with([
+            'booking.customer',
+            'booking.package',
+            'booking.payments',
+            'assignedBy',
+        ])
+            ->where('vendor_id', $vendor->id)
+            ->latest()
+            ->get();
+
+        return response()->json(['data' => $requests]);
+    }
+
 }

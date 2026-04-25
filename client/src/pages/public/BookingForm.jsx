@@ -188,7 +188,7 @@ export default function BookingForm() {
     setLoading(true);
     setApiError("");
     try {
-      const res = await fetch(`${API}/bookings/${bookingId}/pay`, {
+      const res = await fetch(`${API}/bookings/${bookingId}/pay-dp`, {
         method: "POST",
         headers,
       });
@@ -651,7 +651,7 @@ export default function BookingForm() {
               </Link>
               {bookingId && (
                 <Link
-                  to={"/pelanggan/invoice/" + bookingId}
+                  to={"/pelanggan/invoice/" + bookingId + "?type=dp"}
                   target="_blank"
                   className="flex items-center justify-center gap-2 px-8 py-3 border border-[var(--color-gold)] text-[var(--color-gold)] text-xs uppercase tracking-widest font-[var(--font-sans)] hover:bg-[var(--color-gold-pale)] transition-all"
                 >

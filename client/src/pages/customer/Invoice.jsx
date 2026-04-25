@@ -112,9 +112,14 @@ export default function Invoice() {
 
   useEffect(() => {
     if (!id) return;
-    bookingService
-      .getById(id)
-      .then((data) => setBooking(data))
+    // Gunakan endpoint publik yang tidak perlu login
+    const API = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    fetch(`${API}/bookings/${id}/invoice`)
+      .then((r) => {
+        if (!r.ok) throw new Error("Booking tidak ditemukan");
+        return r.json();
+      })
+      .then((res) => setBooking(res.data?.data ?? res.data))
       .catch(() => setError("Booking tidak ditemukan."))
       .finally(() => setLoading(false));
   }, [id]);

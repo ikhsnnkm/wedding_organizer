@@ -32,6 +32,9 @@ Route::post('/payment/notify', [BookingController::class, 'midtransNotify']);
 // Tanggal yang sudah dipesan
 Route::get('/bookings/booked-dates', [BookingController::class, 'bookedDates']);
 
+// Invoice publik — dapat diakses tanpa login dengan verifikasi
+Route::get('/bookings/{booking}/invoice', [BookingController::class, 'invoicePublic']);
+
 // ── PROTECTED ─────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
