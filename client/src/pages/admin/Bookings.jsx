@@ -130,6 +130,38 @@ function WorkflowPanel({ booking, vendors, onUpdated }) {
     }
   }
 
+  async function doAction(endpoint, body = {}, method = "PATCH") {
+    setActing(true);
+    try {
+      const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+      const token =
+        sessionStorage.getItem("amaranta_token") ||
+        localStorage.getItem("amaranta_token");
+      const res = await fetch(
+        `${API}/admin/bookings/${booking.id}/${endpoint}`,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: Object.keys(body).length ? JSON.stringify(body) : undefined,
+        },
+      );
+      if (res.ok) {
+        onUpdated();
+      } else {
+        const d = await res.json();
+        alert(d.message || "Gagal");
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setActing(false);
+    }
+  }
+
   async function doMarkPaid() {
     if (!window.confirm("Tandai booking ini sudah dibayar?")) return;
     setActing(true);
@@ -206,16 +238,50 @@ function WorkflowPanel({ booking, vendors, onUpdated }) {
         ))}
       </div>
 
-      {/* Tandai sudah bayar — untuk bypass webhook Midtrans di dev */}
+      {/* Konfirmasi Pembayaran DP — setelah customer bayar via Midtrans */}
+      {s === "dp_confirm_pending" && (
+        <div className="p-4 bg-blue-50 border border-blue-200 space-y-2">
+          <p className="text-xs font-medium text-blue-800 font-[var(--font-sans)]">
+            💳 Customer sudah bayar DP — menunggu konfirmasi Anda
+          </p>
+          <p className="text-xs text-blue-600 font-[var(--font-sans)]">
+            Setelah dikonfirmasi, proses berlanjut ke pemilihan vendor.
+          </p>
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            onClick={() => doAction("confirm-dp-payment", {}, "PATCH")}
+          >
+            ✅ Konfirmasi Pembayaran DP
+          </Button>
+        </div>
+      )}
+
+      {/* Konfirmasi Pelunasan Full — setelah customer lunasi 70% */}
+      {s === "full_confirm_pending" && (
+        <div className="p-4 bg-blue-50 border border-blue-200 space-y-2">
+          <p className="text-xs font-medium text-blue-800 font-[var(--font-sans)]">
+            💰 Customer sudah melunasi 70% — menunggu konfirmasi Anda
+          </p>
+          <Button
+            size="sm"
+            variant="gold"
+            isLoading={acting}
+            onClick={() => doAction("confirm-full-payment", {}, "PATCH")}
+          >
+            ✅ Konfirmasi Pelunasan
+          </Button>
+        </div>
+      )}
+
+      {/* Tandai sudah bayar — fallback jika Midtrans tidak terdeteksi */}
       {(s === "waiting_payment" ||
         s === "waiting_dp" ||
         s === "payment_failed") && (
         <div className="p-4 bg-amber-50 border border-amber-200 space-y-2">
           <p className="text-xs font-medium text-amber-800 font-[var(--font-sans)]">
-            💰 Booking ini belum berstatus dibayar
-          </p>
-          <p className="text-xs text-amber-600 font-[var(--font-sans)]">
-            Jika Midtrans sudah konfirmasi pembayaran, tandai manual di sini.
+            💰 Booking belum berstatus dibayar
           </p>
           <Button
             size="sm"
@@ -223,7 +289,7 @@ function WorkflowPanel({ booking, vendors, onUpdated }) {
             isLoading={acting}
             onClick={doMarkPaid}
           >
-            ✅ Tandai Sudah Bayar
+            ✅ Tandai Sudah Bayar (Manual)
           </Button>
         </div>
       )}

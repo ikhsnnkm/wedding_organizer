@@ -10,7 +10,6 @@
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
-import { bookingService } from "../../services";
 import { PACKAGES, AMARANTA_INFO, formatRupiah } from "../../data/packages";
 
 // CSS print disuntikkan ke <head> saat komponen mount
@@ -112,15 +111,17 @@ export default function Invoice() {
 
   useEffect(() => {
     if (!id) return;
-    // Gunakan endpoint publik yang tidak perlu login
-    const API = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
-    fetch(`${API}/bookings/${id}/invoice`)
+    const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+    // Pakai endpoint publik /invoice — tidak butuh token
+    fetch(`${API}/bookings/${id}/invoice`, {
+      headers: { Accept: "application/json" },
+    })
       .then((r) => {
-        if (!r.ok) throw new Error("Booking tidak ditemukan");
+        if (!r.ok) throw new Error();
         return r.json();
       })
-      .then((res) => setBooking(res.data?.data ?? res.data))
-      .catch(() => setError("Booking tidak ditemukan."))
+      .then((d) => setBooking(d.data))
+      .catch(() => setError("Invoice tidak ditemukan."))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -602,11 +603,11 @@ export default function Invoice() {
                   textAlign: "right",
                 }}
               >
-                {formatRupiah(booking.total_price)}
+                {formatRupiah(isDP ? dpAmount : booking.total_price)}
               </p>
             </div>
 
-            {/* Total */}
+            {/* Total — DP vs Full */}
             <div
               style={{
                 padding: "12px 14px 0",
@@ -615,53 +616,131 @@ export default function Invoice() {
                 gap: 0,
               }}
             >
-              <Row label="Subtotal" value={formatRupiah(booking.total_price)} />
-              <Row label="PPN (0%)" value="Rp 0" />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  padding: "14px 0 4px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: "#6B6660",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Total Pembayaran
-                </span>
-                <span
-                  style={{
-                    fontFamily: "Playfair Display, Georgia, serif",
-                    fontSize: 24,
-                    color: "#C9A96E",
-                    fontWeight: 600,
-                  }}
-                >
-                  {formatRupiah(booking.total_price)}
-                </span>
-              </div>
-              {booking.full_paid_at && (
-                <p
-                  style={{
-                    fontSize: 11,
-                    color: "#10b981",
-                    margin: 0,
-                    textAlign: "right",
-                  }}
-                >
-                  ✓ Lunas pada{" "}
-                  {new Date(booking.full_paid_at).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </p>
+              {isDP ? (
+                <>
+                  <Row
+                    label="Total Harga Paket"
+                    value={formatRupiah(totalPrice)}
+                  />
+                  <Row label="PPN (0%)" value="Rp 0" />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      padding: "14px 0 4px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "#6B6660",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      DP Dibayar (30%)
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "Playfair Display,Georgia,serif",
+                        fontSize: 24,
+                        color: "#C9A96E",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {formatRupiah(dpAmount)}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "6px 0",
+                      borderTop: "1px dashed #E5DDD0",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: "#8A8480" }}>
+                      Sisa Pelunasan (70%)
+                    </span>
+                    <span style={{ fontSize: 14, color: "#8A8480" }}>
+                      {formatRupiah(sisaAmount)}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "#e67e22",
+                      margin: "6px 0 0",
+                      textAlign: "right",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    * Pelunasan dibayarkan setelah admin mengkonfirmasi tahap
+                    persiapan
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Row
+                    label="Total Harga Paket"
+                    value={formatRupiah(totalPrice)}
+                  />
+                  <Row
+                    label="DP yang telah dibayar"
+                    value={formatRupiah(dpAmount)}
+                  />
+                  <Row
+                    label="Pelunasan (70%)"
+                    value={formatRupiah(sisaAmount)}
+                  />
+                  <Row label="PPN (0%)" value="Rp 0" />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      padding: "14px 0 4px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "#6B6660",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Total Pembayaran
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "Playfair Display,Georgia,serif",
+                        fontSize: 24,
+                        color: "#C9A96E",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {formatRupiah(totalPrice)}
+                    </span>
+                  </div>
+                  {booking.full_paid_at && (
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "#10b981",
+                        margin: 0,
+                        textAlign: "right",
+                      }}
+                    >
+                      ✓ Lunas pada{" "}
+                      {new Date(booking.full_paid_at).toLocaleDateString(
+                        "id-ID",
+                        { day: "numeric", month: "long", year: "numeric" },
+                      )}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>

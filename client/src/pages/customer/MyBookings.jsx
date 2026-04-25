@@ -108,6 +108,14 @@ const ADMIN_MSG = {
     text: "⏳ Silakan bayar DP 30% untuk memulai proses pernikahan Anda.",
     color: "bg-amber-50 border-amber-200 text-amber-700",
   },
+  dp_confirm_pending: {
+    text: "✅ Pembayaran DP diterima! Sedang menunggu konfirmasi admin sebelum proses lanjut.",
+    color: "bg-blue-50 border-blue-200 text-blue-700",
+  },
+  full_confirm_pending: {
+    text: "✅ Pelunasan diterima! Sedang menunggu konfirmasi admin.",
+    color: "bg-blue-50 border-blue-200 text-blue-700",
+  },
   payment_failed: {
     text: "❌ Pembayaran gagal. Silakan coba lagi.",
     color: "bg-red-50 border-red-200 text-red-600",
@@ -152,10 +160,9 @@ const ADMIN_MSG = {
 
 function PhaseBar({ phase, adminStatus }) {
   // Mapping phase + admin_status ke step 1-5
-  function getStep() {
-    if (adminStatus === "waiting_payment" || phase === "pending") return 1;
-    if (adminStatus === "payment_failed") return 1;
-    if (phase === "paid" && adminStatus === "waiting_vendor") return 2;
+  function getStep(dpPaidAt, fullPaidAt) {
+    if (phase === "rated" || adminStatus === "completed") return 5;
+    if (phase === "in_event" || adminStatus === "in_event") return 4;
     if (
       [
         "vendor_assigned",
@@ -163,16 +170,25 @@ function PhaseBar({ phase, adminStatus }) {
         "vendor_rejected",
         "tech_meeting_scheduled",
         "preparation",
+        "full_confirm_pending",
       ].includes(adminStatus)
     )
       return 3;
-    if (phase === "in_event" || adminStatus === "in_event") return 4;
-    if (phase === "rated" || adminStatus === "completed") return 5;
-    // Fallback
-    const m = { pending: 1, paid: 2, in_event: 4, rated: 5 };
-    return m[phase] || 1;
+    if (
+      dpPaidAt ||
+      phase === "dp_paid" ||
+      adminStatus === "waiting_vendor" ||
+      adminStatus === "dp_confirm_pending"
+    )
+      return 2;
+    return 1;
   }
-  const cur = getStep();
+  const cur = getStep(
+    phase === "dp_paid" ||
+      adminStatus === "dp_confirm_pending" ||
+      adminStatus === "waiting_vendor",
+    phase === "paid",
+  );
 
   return (
     <div className="flex items-center gap-0 overflow-x-auto pb-1">
@@ -277,6 +293,7 @@ export default function CustomerMyBookings() {
   // Modal states
   const [ratingModal, setRatingModal] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null);
   const [ratingValue, setRatingValue] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [acting, setActing] = useState(false);
@@ -302,38 +319,124 @@ export default function CustomerMyBookings() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  async function handlePayDp(booking) {
+    const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+    const token =
+      sessionStorage.getItem("amaranta_token") ||
+      localStorage.getItem("amaranta_token");
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: "Bearer " + token,
+    };
+
+    async function confirmAfterPay() {
+      // Setelah Midtrans onSuccess, langsung konfirmasi ke backend
+      await fetch(`${API}/bookings/${booking.id}/confirm-dp`, {
+        method: "POST",
+        headers,
+      });
+      loadBookings();
+      toastSuccess("Pembayaran DP berhasil! Booking Anda sedang diproses.");
+    }
+
+    try {
+      const res = await fetch(`${API}/bookings/${booking.id}/pay-dp`, {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toastError(data.message || "Tidak bisa memproses pembayaran DP.");
+        return;
+      }
+      if (typeof window.snap !== "undefined") {
+        window.snap.pay(data.snap_token, {
+          onSuccess: () => confirmAfterPay(),
+          onPending: () => loadBookings(),
+          onClose: () => {},
+        });
+      } else {
+        // Mode dev: langsung konfirmasi tanpa Snap
+        await confirmAfterPay();
+      }
+    } catch {
+      toastError("Tidak bisa terhubung ke server.");
+    }
+  }
+
   async function handlePayFull(booking) {
+    const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+    const token =
+      sessionStorage.getItem("amaranta_token") ||
+      localStorage.getItem("amaranta_token");
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: "Bearer " + token,
+    };
+
+    async function confirmAfterFull() {
+      await fetch(`${API}/bookings/${booking.id}/confirm-full`, {
+        method: "POST",
+        headers,
+      });
+      loadBookings();
+      toastSuccess("Pelunasan berhasil! Acara siap dieksekusi.");
+    }
+
+    try {
+      const res = await fetch(`${API}/bookings/${booking.id}/pay-full`, {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toastError(data.message || "Belum bisa lunasi sekarang.");
+        return;
+      }
+      if (typeof window.snap !== "undefined") {
+        window.snap.pay(data.snap_token, {
+          onSuccess: () => confirmAfterFull(),
+          onPending: () => loadBookings(),
+          onClose: () => {},
+        });
+      } else {
+        await confirmAfterFull();
+      }
+    } catch {
+      toastError("Tidak bisa terhubung ke server.");
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteModal) return;
+    setActing(true);
     try {
       const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
       const token =
         sessionStorage.getItem("amaranta_token") ||
         localStorage.getItem("amaranta_token");
-      const res = await fetch(`${API}/bookings/${booking.id}/pay-full`, {
-        method: "POST",
+      const res = await fetch(`${API}/bookings/${deleteModal.id}/hide`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
           Authorization: "Bearer " + token,
         },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message || "Belum bisa lunasi sekarang.");
-        return;
-      }
-      // Buka Midtrans Snap
-      if (typeof window.snap !== "undefined") {
-        window.snap.pay(data.snap_token, {
-          onSuccess: () => loadBookings(),
-          onPending: () => {},
-          onClose: () => {},
-        });
+      if (res.ok) {
+        setBookings((p) => p.filter((b) => b.id !== deleteModal.id));
+        toastSuccess("Riwayat booking dihapus.");
       } else {
-        alert("Mode dev: pelunasan dicatat. Refresh halaman.");
-        loadBookings();
+        const d = await res.json();
+        toastError(d.message || "Gagal menghapus riwayat.");
       }
-    } catch (err) {
-      alert("Tidak bisa terhubung ke server.");
+    } catch {
+      toastError("Tidak bisa terhubung ke server.");
+    } finally {
+      setActing(false);
+      setDeleteModal(null);
     }
   }
 
@@ -348,7 +451,10 @@ export default function CustomerMyBookings() {
           "Content-Type": "application/json",
           Accept: "application/json",
           Authorization:
-            "Bearer " + (localStorage.getItem("amaranta_token") || ""),
+            "Bearer " +
+            (sessionStorage.getItem("amaranta_token") ||
+              localStorage.getItem("amaranta_token") ||
+              ""),
         },
       });
       if (res.ok) {
@@ -404,8 +510,9 @@ export default function CustomerMyBookings() {
   // Bisa batalkan hanya jika belum bayar
   function canCancel(b) {
     return (
-      ["waiting_payment", "payment_failed"].includes(b.admin_status) &&
-      b.status !== "cancelled"
+      ["waiting_dp", "waiting_payment", "payment_failed"].includes(
+        b.admin_status,
+      ) && b.status !== "cancelled"
     );
   }
 
@@ -481,9 +588,21 @@ export default function CustomerMyBookings() {
           {bookings.map((booking) => (
             <div
               key={booking.id}
-              className="bg-white border border-[var(--color-cream-border)] overflow-hidden"
+              className={[
+                "overflow-hidden border",
+                booking.status === "cancelled"
+                  ? "bg-[var(--color-cream)] border-[var(--color-cream-border)] opacity-70"
+                  : "bg-white border-[var(--color-cream-border)]",
+              ].join(" ")}
             >
-              <div className="h-1 bg-[var(--color-gold)]" />
+              <div
+                className={[
+                  "h-1",
+                  booking.status === "cancelled"
+                    ? "bg-red-300"
+                    : "bg-[var(--color-gold)]",
+                ].join(" ")}
+              />
               <div className="p-5">
                 {/* Header booking */}
                 <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
@@ -522,24 +641,31 @@ export default function CustomerMyBookings() {
                 </div>
 
                 {/* Info status dari admin */}
-                {ADMIN_MSG[booking.admin_status] && (
-                  <div
-                    className={[
-                      "mb-4 px-3 py-2 border text-xs font-[var(--font-sans)]",
-                      ADMIN_MSG[booking.admin_status]?.color ||
-                        "bg-[var(--color-cream)] border-[var(--color-cream-border)] text-[var(--color-dark-muted)]",
-                    ].join(" ")}
-                  >
-                    {ADMIN_MSG[booking.admin_status]?.text}
-                    {booking.vendor?.name &&
-                      booking.admin_status === "vendor_confirmed" && (
-                        <span className="ml-2 font-medium">
-                          {" "}
-                          {booking.vendor.name}
-                        </span>
-                      )}
-                  </div>
-                )}
+                {(() => {
+                  const key =
+                    booking.dp_paid_at && booking.admin_status === "waiting_dp"
+                      ? "dp_confirm_pending"
+                      : booking.admin_status;
+                  const msg = ADMIN_MSG[key];
+                  if (!msg) return null;
+                  return (
+                    <div
+                      className={[
+                        "mb-4 px-3 py-2 border text-xs font-[var(--font-sans)]",
+                        msg.color,
+                      ].join(" ")}
+                    >
+                      {msg.text}
+                      {booking.vendor?.name &&
+                        booking.admin_status === "vendor_confirmed" && (
+                          <span className="ml-2 font-medium">
+                            {" "}
+                            {booking.vendor.name}
+                          </span>
+                        )}
+                    </div>
+                  );
+                })()}
 
                 {/* Progress persiapan */}
                 {booking.preparation_progress > 0 && (
@@ -571,18 +697,66 @@ export default function CustomerMyBookings() {
 
                 {/* Aksi */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Bayar DP — jika belum bayar DP */}
+                  {/* Bayar DP — hanya jika belum bayar, bukan sedang menunggu konfirmasi */}
                   {(booking.admin_status === "waiting_dp" ||
-                    booking.admin_status === "waiting_payment") && (
-                    <a
-                      href={"/pesan/" + booking.package?.tier_id}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs font-[var(--font-sans)] hover:bg-[var(--color-gold-light)] transition-all"
-                    >
-                      💳 Bayar DP 30% —{" "}
+                    booking.admin_status === "waiting_payment") &&
+                    !booking.dp_paid_at &&
+                    booking.status !== "cancelled" && (
+                      <button
+                        onClick={() => handlePayDp(booking)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs font-[var(--font-sans)] hover:bg-[var(--color-gold-light)] transition-all"
+                      >
+                        💳 Bayar DP 30% —{" "}
+                        {booking.total_price
+                          ? formatRupiah(Math.round(booking.total_price * 0.3))
+                          : ""}
+                      </button>
+                    )}
+
+                  {/* Menunggu konfirmasi admin setelah bayar DP — TIDAK bisa bayar ulang */}
+                  {booking.admin_status === "dp_confirm_pending" && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 text-xs text-blue-700 font-[var(--font-sans)]">
+                      <svg
+                        className="w-3.5 h-3.5 flex-shrink-0 animate-pulse"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10" opacity="0.3" />
+                        <path
+                          d="M12 7v5l3 3"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      </svg>
+                      DP Rp{" "}
                       {booking.total_price
                         ? formatRupiah(Math.round(booking.total_price * 0.3))
-                        : ""}
-                    </a>
+                        : ""}{" "}
+                      — Menunggu konfirmasi admin
+                    </div>
+                  )}
+
+                  {/* Menunggu konfirmasi pelunasan */}
+                  {booking.admin_status === "full_confirm_pending" && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 text-xs text-blue-700 font-[var(--font-sans)]">
+                      <svg
+                        className="w-3.5 h-3.5 flex-shrink-0 animate-pulse"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10" opacity="0.3" />
+                        <path
+                          d="M12 7v5l3 3"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      </svg>
+                      Pelunasan diterima — Menunggu konfirmasi admin
+                    </div>
                   )}
 
                   {/* Lunasi — hanya saat preparation + DP sudah bayar */}
@@ -600,9 +774,10 @@ export default function CustomerMyBookings() {
                     )}
 
                   {/* Invoice DP — muncul setelah DP terbayar */}
-                  {["dp_paid", "paid", "in_event", "rated"].includes(
-                    booking.phase,
-                  ) && (
+                  {(booking.dp_paid_at ||
+                    ["dp_paid", "paid", "in_event", "rated"].includes(
+                      booking.phase,
+                    )) && (
                     <Link
                       to={
                         "/pelanggan/invoice/" +
@@ -634,15 +809,16 @@ export default function CustomerMyBookings() {
                     </Link>
                   )}
 
-                  {/* Bayar ulang jika payment gagal */}
-                  {booking.admin_status === "payment_failed" && (
-                    <a
-                      href={"/pesan/" + booking.package?.tier_id}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs font-[var(--font-sans)] hover:bg-[var(--color-gold-light)] transition-all"
-                    >
-                      💳 Bayar Ulang
-                    </a>
-                  )}
+                  {/* Bayar ulang HANYA jika benar-benar gagal, bukan menunggu konfirmasi */}
+                  {booking.admin_status === "payment_failed" &&
+                    !booking.dp_paid_at && (
+                      <button
+                        onClick={() => handlePayDp(booking)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-[var(--color-gold)] text-[var(--color-dark)] text-xs font-[var(--font-sans)] hover:bg-[var(--color-gold-light)] transition-all"
+                      >
+                        💳 Bayar Ulang DP
+                      </button>
+                    )}
 
                   {/* Batalkan — hanya sebelum bayar */}
                   {canCancel(booking) && (
@@ -664,6 +840,28 @@ export default function CustomerMyBookings() {
                         />
                       </svg>
                       Batalkan
+                    </button>
+                  )}
+
+                  {booking.status === "cancelled" && (
+                    <button
+                      onClick={() => setDeleteModal(booking)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-red-100 text-xs text-red-400 hover:bg-red-50 font-[var(--font-sans)] transition-all"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                      Hapus Riwayat
                     </button>
                   )}
 
@@ -690,6 +888,39 @@ export default function CustomerMyBookings() {
           ))}
         </div>
       )}
+
+      {/* Modal Hapus Riwayat */}
+      <Modal
+        isOpen={!!deleteModal}
+        onClose={() => setDeleteModal(null)}
+        title="Hapus Riwayat Booking"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteModal(null)}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              isLoading={acting}
+              onClick={handleDelete}
+            >
+              Ya, Hapus
+            </Button>
+          </>
+        }
+      >
+        {deleteModal && (
+          <p className="text-sm text-[var(--color-dark-muted)] font-[var(--font-sans)]">
+            Hapus riwayat booking <strong>{deleteModal.order_id}</strong> dari
+            daftar?
+          </p>
+        )}
+      </Modal>
 
       {/* Modal Batalkan */}
       <Modal

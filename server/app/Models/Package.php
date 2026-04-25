@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Package extends Model
 {
-    protected $fillable = ['vendor_id', 'tier_id', 'price', 'is_active'];
+    protected $fillable = ['vendor_id', 'tier_id', 'price', 'max_guests', 'is_active'];
 
     protected function casts(): array
     {
         return [
-            'price'     => 'integer',
+            'price', 'max_guests'     => 'integer',
             'is_active' => 'boolean',
         ];
     }

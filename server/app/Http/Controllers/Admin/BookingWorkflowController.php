@@ -199,4 +199,32 @@ class BookingWorkflowController extends Controller
     }
 
     // PATCH /api/admin/bookings/{booking}/mark-paid
+    // PATCH /api/admin/bookings/{booking}/confirm-dp-payment
+    // Admin konfirmasi pembayaran DP → lanjut ke proses vendor
+    public function confirmDpPayment(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->admin_status !== 'dp_confirm_pending') {
+            return response()->json(['message' => 'Tidak ada pembayaran DP yang perlu dikonfirmasi.'], 422);
+        }
+        $booking->update(['admin_status' => 'waiting_vendor']);
+        return response()->json([
+            'message' => 'Pembayaran DP dikonfirmasi. Silakan assign vendor.',
+            'data'    => $booking->fresh(),
+        ]);
+    }
+
+    // PATCH /api/admin/bookings/{booking}/confirm-full-payment
+    // Admin konfirmasi pelunasan → booking siap eksekusi
+    public function confirmFullPayment(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->admin_status !== 'full_confirm_pending') {
+            return response()->json(['message' => 'Tidak ada pelunasan yang perlu dikonfirmasi.'], 422);
+        }
+        $booking->update(['admin_status' => 'preparation']);
+        return response()->json([
+            'message' => 'Pelunasan dikonfirmasi. Booking siap dieksekusi.',
+            'data'    => $booking->fresh(),
+        ]);
+    }
+
 }

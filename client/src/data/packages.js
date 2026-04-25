@@ -120,8 +120,8 @@ export const PACKAGES = [
     price: 45000000,
     color: "#C9A96E",
     popular: true,
-    guests: "100–200 tamu",
-    maxGuests: 200,
+    guests: "100–300 tamu",
+    maxGuests: 300,
     duration: "8 jam",
     img: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=80",
     includes: [
@@ -173,8 +173,8 @@ export const PACKAGES = [
     price: 85000000,
     color: "#B8A9C9",
     popular: false,
-    guests: "200–500 tamu",
-    maxGuests: 500,
+    guests: "200–600 tamu",
+    maxGuests: 600,
     duration: "10 jam",
     img: "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&q=80",
     includes: [

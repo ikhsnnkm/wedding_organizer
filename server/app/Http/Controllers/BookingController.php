@@ -26,6 +26,7 @@ class BookingController extends Controller
     {
         $bookings = Booking::with(['package', 'vendor', 'payments', 'vendorRequests.vendor'])
             ->where('customer_id', $request->user()->id)
+            ->whereNull('hidden_at')
             ->latest()
             ->get();
         return response()->json(['data' => $bookings]);
@@ -58,7 +59,8 @@ class BookingController extends Controller
             'pemesan_phone' => 'required|string|regex:/^08\d{8,11}$/',
             'wedding_date'  => 'required|date|after:today',
             'location'      => 'required|string|max:255',
-            'konsep'        => 'required|string|max:255',
+            'konsep'        => 'required|string|max:200',
+            'guest_count'   => 'sometimes|nullable|integer|min:1',
             'notes'         => 'sometimes|nullable|string',
         ]);
 
@@ -70,7 +72,15 @@ class BookingController extends Controller
                               ->where('is_active', true)
                               ->firstOrFail();
         }
-        $dp      = (int) round($package->price * 0.3);
+        // Validasi kapasitas tamu
+        if ($request->guest_count && $package->max_guests) {
+            if ((int)$request->guest_count > $package->max_guests) {
+                return response()->json([
+                    'message' => 'Jumlah tamu ('.$request->guest_count.') melebihi kapasitas Paket '.ucfirst($package->tier_id).' (maks. '.$package->max_guests.' tamu).',
+                    'errors'  => ['guest_count' => ['Melebihi kapasitas paket']],
+                ], 422);
+            }
+        }
 
         $booking = Booking::create([
             'order_id'      => Booking::generateOrderId(),
@@ -87,7 +97,7 @@ class BookingController extends Controller
             'total_price'   => $package->price,
             'status'        => 'pending',
             'phase'         => 'pending',
-            'admin_status'  => 'waiting_payment',
+            'admin_status'  => 'waiting_dp',
         ]);
 
         return response()->json([
@@ -265,6 +275,60 @@ class BookingController extends Controller
         ]);
     }
 
+    // POST /api/bookings/{booking}/confirm-dp
+    // Dipanggil oleh frontend setelah Midtrans Snap onSuccess (DP)
+    // Tidak perlu menunggu webhook — frontend sudah dapat konfirmasi dari Midtrans
+    public function confirmDp(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+        if ($booking->isDpPaid()) {
+            return response()->json([
+                'message' => 'DP sudah dikonfirmasi.',
+                'data'    => $booking->fresh(['vendor','package','payments']),
+                'payment_summary' => $booking->paymentSummary(),
+            ]);
+        }
+        $booking->update([
+            'phase'          => 'dp_paid',
+            'dp_paid_at'     => now(),
+            'status'         => 'confirmed',
+            'admin_status'   => 'dp_confirm_pending',  // tunggu konfirmasi admin
+        ]);
+        return response()->json([
+            'message' => 'Pembayaran DP berhasil. Menunggu konfirmasi admin.',
+            'data'    => $booking->fresh(['vendor','package','payments']),
+            'payment_summary' => $booking->paymentSummary(),
+        ]);
+    }
+
+    // POST /api/bookings/{booking}/confirm-full
+    // Dipanggil oleh frontend setelah Midtrans Snap onSuccess (pelunasan)
+    public function confirmFull(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+        if ($booking->isFullPaid()) {
+            return response()->json([
+                'message' => 'Pelunasan sudah dikonfirmasi.',
+                'data'    => $booking->fresh(['vendor','package','payments']),
+                'payment_summary' => $booking->paymentSummary(),
+            ]);
+        }
+        $booking->update([
+            'phase'        => 'paid',
+            'full_paid_at' => now(),
+            'admin_status' => 'full_confirm_pending',  // tunggu konfirmasi admin
+        ]);
+        return response()->json([
+            'message' => 'Pembayaran pelunasan berhasil. Menunggu konfirmasi admin.',
+            'data'    => $booking->fresh(['vendor','package','payments']),
+            'payment_summary' => $booking->paymentSummary(),
+        ]);
+    }
+
     // GET /api/bookings/booked-dates
     public function bookedDates(): JsonResponse
     {
@@ -297,6 +361,45 @@ class BookingController extends Controller
             ->get();
 
         return response()->json(['data' => $requests]);
+    }
+
+
+    // PATCH /api/bookings/{booking}/cancel
+    // POST /api/bookings/{booking}/rate
+    // GET /api/bookings/{booking}/invoice
+    // Publik — tidak butuh auth agar bisa share/print tanpa login
+    public function invoice(Booking $booking): JsonResponse
+    {
+        return response()->json([
+            'data'            => $booking->load(['customer', 'vendor', 'package', 'payments']),
+            'payment_summary' => $booking->paymentSummary(),
+        ]);
+    }
+    // PATCH /api/bookings/{booking}/hide
+    // Customer sembunyikan booking cancelled dari tampilan
+    public function hide(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+        if ($booking->status !== 'cancelled') {
+            return response()->json(['message' => 'Hanya booking yang dibatalkan yang bisa disembunyikan.'], 422);
+        }
+        $booking->update(['hidden_at' => now()]);
+        return response()->json(['message' => 'Riwayat disembunyikan.']);
+    }
+    // DELETE /api/bookings/{booking}
+    // Customer hapus riwayat booking yang sudah dibatalkan
+    public function destroy(Request $request, Booking $booking): JsonResponse
+    {
+        if ($booking->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+        if ($booking->status !== 'cancelled') {
+            return response()->json(['message' => 'Hanya booking yang dibatalkan yang bisa dihapus.'], 422);
+        }
+        $booking->delete();
+        return response()->json(['message' => 'Riwayat booking dihapus.']);
     }
 
 }

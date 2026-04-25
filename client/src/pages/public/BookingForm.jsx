@@ -121,10 +121,16 @@ export default function BookingForm() {
     if (!form.phone.match(/^08/)) e.phone = "Format: 08xxxxxxxxxx";
     if (!form.wedding_date) e.wedding_date = "Tanggal wajib diisi";
     else if (isDateBooked(form.wedding_date))
-      e.wedding_date =
-        "Tanggal ini sudah dipesan oleh customer lain. Pilih tanggal berbeda.";
+      e.wedding_date = "Tanggal ini sudah dipesan. Pilih tanggal lain.";
     if (!form.location.trim()) e.location = "Lokasi wajib diisi";
     if (!form.konsep.trim()) e.konsep = "Konsep wajib diisi";
+    if (
+      form.guest_count &&
+      pkg?.maxGuests &&
+      parseInt(form.guest_count) > pkg.maxGuests
+    ) {
+      e.guest_count = `Melebihi kapasitas Paket ${pkg.tier} (maks. ${pkg.maxGuests} tamu)`;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -135,25 +141,19 @@ export default function BookingForm() {
     setLoading(true);
     setApiError("");
     try {
-      const notes = [
-        form.guest_count ? `Tamu: ${form.guest_count} orang` : "",
-        form.notes || "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
       const res = await fetch(API + "/bookings", {
         method: "POST",
         headers,
         body: JSON.stringify({
-          tier_id: pkg.id, // 'silver' | 'gold' | 'platinum' — lebih stabil dari ID numerik
+          tier_id: pkg.id,
           pemesan_name: form.name,
           pemesan_email: form.email,
           pemesan_phone: form.phone,
           wedding_date: form.wedding_date,
           location: form.location,
           konsep: form.konsep,
-          notes: notes || null,
+          guest_count: form.guest_count ? parseInt(form.guest_count) : null,
+          notes: form.notes || null,
         }),
       });
       const data = await res.json();
@@ -173,6 +173,15 @@ export default function BookingForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function confirmDpAfterPay() {
+    try {
+      await fetch(`${API}/bookings/${bookingId}/confirm-dp`, {
+        method: "POST",
+        headers,
+      });
+    } catch {}
   }
 
   // Step 2 → 3: buat Midtrans Snap token, buka popup bayar
@@ -202,7 +211,8 @@ export default function BookingForm() {
       const snapToken = data.snap_token || data.data?.snap_token;
       if (snapReady() && snapToken) {
         window.snap.pay(snapToken, {
-          onSuccess: () => {
+          onSuccess: async () => {
+            await confirmDpAfterPay();
             setLoading(false);
             setStep(3);
           },
@@ -400,16 +410,41 @@ export default function BookingForm() {
                   <div>
                     <label className="text-sm font-medium text-[var(--color-dark-muted)] font-[var(--font-sans)] block mb-1.5">
                       Perkiraan Tamu
+                      {pkg?.maxGuests && (
+                        <span className="ml-1 text-[10px] text-[var(--color-slate)] font-normal">
+                          (maks. {pkg.maxGuests})
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
                       name="guest_count"
                       value={form.guest_count}
-                      onChange={handleChange}
-                      placeholder="150"
+                      onChange={(e) => {
+                        handleChange(e);
+                        if (
+                          pkg?.maxGuests &&
+                          e.target.value &&
+                          parseInt(e.target.value) > pkg.maxGuests
+                        ) {
+                          setErrors((p) => ({
+                            ...p,
+                            guest_count: `Melebihi kapasitas (maks. ${pkg.maxGuests} tamu)`,
+                          }));
+                        } else {
+                          setErrors((p) => ({ ...p, guest_count: "" }));
+                        }
+                      }}
+                      placeholder={`Maks. ${pkg?.maxGuests || 500}`}
                       min="1"
-                      className={fCls(false)}
+                      max={pkg?.maxGuests}
+                      className={fCls(errors.guest_count)}
                     />
+                    {errors.guest_count && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {errors.guest_count}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--color-dark-muted)] font-[var(--font-sans)] block mb-1.5">

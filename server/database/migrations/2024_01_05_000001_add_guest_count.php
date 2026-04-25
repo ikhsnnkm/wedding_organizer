@@ -24,8 +24,8 @@ return new class extends Migration
 
         // Update max_guests sesuai tier
         DB::table('packages')->where('tier_id', 'silver')->update(['max_guests' => 100]);
-        DB::table('packages')->where('tier_id', 'gold')->update(['max_guests' => 200]);
-        DB::table('packages')->where('tier_id', 'platinum')->update(['max_guests' => 500]);
+        DB::table('packages')->where('tier_id', 'gold')->update(['max_guests' => 300]);
+        DB::table('packages')->where('tier_id', 'platinum')->update(['max_guests' => 600]);
     }
 
     public function down(): void

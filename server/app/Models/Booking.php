@@ -20,7 +20,7 @@ class Booking extends Model
         'tech_meeting_at', 'tech_meeting_location',
         'tech_meeting_notes', 'tech_meeting_confirmed',
         'preparation_progress',
-        'rating', 'review', 'rated_at',
+        'rating', 'review', 'rated_at', 'hidden_at',
     ];
 
     protected function casts(): array
@@ -33,6 +33,7 @@ class Booking extends Model
             'tech_meeting_at'        => 'datetime',
             'tech_meeting_confirmed' => 'boolean',
             'rated_at'               => 'datetime',
+            'hidden_at'              => 'datetime',
             'total_price'            => 'integer',
             'dp_amount'              => 'integer',
             'preparation_progress'   => 'integer',

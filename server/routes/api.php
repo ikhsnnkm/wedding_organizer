@@ -32,8 +32,8 @@ Route::post('/payment/notify', [BookingController::class, 'midtransNotify']);
 // Tanggal yang sudah dipesan
 Route::get('/bookings/booked-dates', [BookingController::class, 'bookedDates']);
 
-// Invoice publik — dapat diakses tanpa login dengan verifikasi
-Route::get('/bookings/{booking}/invoice', [BookingController::class, 'invoicePublic']);
+// Invoice publik — tanpa auth agar bisa share/print
+Route::get('/bookings/{booking}/invoice', [BookingController::class, 'invoice']);
 
 // ── PROTECTED ─────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -51,9 +51,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings/vendor',                [BookingController::class, 'vendorInbox']);
     Route::get('/bookings/{booking}',             [BookingController::class, 'show']);
     Route::post('/bookings',                      [BookingController::class, 'store']);
-    Route::post('/bookings/{booking}/pay-dp',     [BookingController::class, 'payDp']);
-    Route::post('/bookings/{booking}/pay-full',   [BookingController::class, 'payFull']);
+    Route::post('/bookings/{booking}/pay-dp',       [BookingController::class, 'payDp']);
+    Route::post('/bookings/{booking}/pay-full',     [BookingController::class, 'payFull']);
+    Route::post('/bookings/{booking}/confirm-dp',   [BookingController::class, 'confirmDp']);
+    Route::post('/bookings/{booking}/confirm-full', [BookingController::class, 'confirmFull']);
     Route::patch('/bookings/{booking}/cancel',    [BookingController::class, 'cancel']);
+    Route::delete('/bookings/{booking}',          [BookingController::class, 'destroy']);
+    Route::patch('/bookings/{booking}/hide',      [BookingController::class, 'hide']);
     Route::post('/bookings/{booking}/rate',       [BookingController::class, 'rate']);
     Route::get('/bookings/{booking}/progress-log',[BookingWorkflowController::class, 'progressLog']);
 
@@ -81,6 +85,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/vendors/{vendor}',        [AdminController::class, 'deleteVendor']);
 
         Route::get('/bookings',                                    [AdminController::class, 'bookings']);
+        Route::patch('/bookings/{booking}/confirm-dp-payment',   [BookingWorkflowController::class, 'confirmDpPayment']);
+        Route::patch('/bookings/{booking}/confirm-full-payment', [BookingWorkflowController::class, 'confirmFullPayment']);
         Route::patch('/bookings/{booking}/mark-paid',              [BookingWorkflowController::class, 'markPaid']);
         Route::patch('/bookings/{booking}/assign-vendor',          [BookingWorkflowController::class, 'assignVendor']);
         Route::patch('/bookings/{booking}/reassign-vendor',        [BookingWorkflowController::class, 'reassignVendor']);
